@@ -27,6 +27,8 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { BorderBeam } from "@/components/ui/border-beam";
+import { AnimatedList, AnimatedListItem } from "@/components/ui/animated-list";
 
 /* ---------- types ---------- */
 
@@ -321,19 +323,24 @@ export default function KitPage() {
 
 function GeneratingPanel({ job }: { job: Step[] }) {
   return (
-    <div className="rounded-xl border bg-card p-6">
+    <div className="relative rounded-xl border bg-card p-6">
+      <BorderBeam size={180} duration={9} />
       <ol className="space-y-4">
-        {job.map((s, i) => (
-          <li key={`${s.stage}-${i}`} className="flex items-start gap-3 text-sm">
-            <StatusDot status={s.status} />
-            <div className="min-w-0">
-              <p className="font-medium">{s.label}</p>
-              {s.detail && <p className="text-muted-foreground">{s.detail}</p>}
-            </div>
-          </li>
-        ))}
+        <AnimatedList delay={500}>
+          {job.map((s, i) => (
+            <AnimatedListItem key={`${s.stage}-${i}`}>
+              <div className="flex items-start gap-3 text-sm">
+                <StatusDot status={s.status} />
+                <div className="min-w-0">
+                  <p className="font-medium">{s.label}</p>
+                  {s.detail && <p className="text-muted-foreground">{s.detail}</p>}
+                </div>
+              </div>
+            </AnimatedListItem>
+          ))}
+        </AnimatedList>
         <li className="flex items-center gap-3 text-sm text-muted-foreground">
-          <span className="mt-1 size-2.5 shrink-0 animate-pulse rounded-full bg-primary/60" aria-hidden />
+          <span className="mt-1.5 size-2.5 shrink-0 animate-pulse rounded-full bg-primary/60" aria-hidden />
           Working on it — this usually takes a minute or two.
         </li>
       </ol>
@@ -352,7 +359,7 @@ function StatusDot({ status }: { status: string }) {
           : status === "skipped"
             ? "bg-muted-foreground/40"
             : "bg-muted-foreground/30";
-  return <span className={cn("mt-1.5 size-2.5 shrink-0 rounded-full", color)} aria-hidden />;
+  return <span className={cn("mt-1.5 size-2.5 shrink-0 rounded-full", color, status === "running" && "animate-pulse")} aria-hidden />;
 }
 
 /* ---------- provenance badges ---------- */
@@ -559,7 +566,7 @@ function QuestionRow(props: {
   const covered = q.requirement_ids.map((rid) => kit.role.requirements.find((r) => r.id === rid)?.text ?? rid);
 
   return (
-    <li className="rounded-xl border bg-card p-4">
+    <li className="rounded-xl border bg-card p-4 transition-shadow hover:shadow-md">
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex gap-1">
           <Button variant="outline" size="icon" aria-label="Move up" disabled={!canUp} onClick={() => onMove(-1)}>
