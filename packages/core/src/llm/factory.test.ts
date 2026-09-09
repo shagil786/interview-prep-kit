@@ -46,6 +46,29 @@ describe("createOpenAICompatibleProvider", () => {
     });
   });
 
+  it("parses JSON wrapped in markdown fences (real gateway behaviour)", async () => {
+    const fenced = '```json\n{"ok": true, "wrapped": "yes"}\n```';
+    const provider = createOpenAICompatibleProvider({
+      baseUrl: "http://x/v1",
+      apiKey: "k",
+      model: "m",
+      fetchImpl: (async () => contentResponse(fenced)) as typeof fetch,
+    });
+    const out = await provider.generateJson<{ ok: boolean; wrapped: string }>({ system: "s", prompt: "p" });
+    expect(out).toEqual({ ok: true, wrapped: "yes" });
+  });
+
+  it("parses JSON with leading prose", async () => {
+    const provider = createOpenAICompatibleProvider({
+      baseUrl: "http://x/v1",
+      apiKey: "k",
+      model: "m",
+      fetchImpl: (async () => contentResponse('Here you go:\n{"a": 1}')) as typeof fetch,
+    });
+    const out = await provider.generateJson<{ a: number }>({ system: "s", prompt: "p" });
+    expect(out).toEqual({ a: 1 });
+  });
+
   it("throws JsonParseError on empty or non-JSON content", async () => {
     const provider = createOpenAICompatibleProvider({
       baseUrl: "http://x/v1",
