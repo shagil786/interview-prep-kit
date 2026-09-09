@@ -1,4 +1,5 @@
 import { JsonParseError, ProviderError, type LlmGenerateOpts, type LlmProvider } from "./provider.js";
+import { extractJsonText } from "./openaiCompatible.js";
 
 export interface GeminiConfig {
   apiKey: string;
@@ -59,7 +60,7 @@ export function createGeminiProvider(config: GeminiConfig): LlmProvider {
         throw new JsonParseError("gemini returned empty candidate text");
       }
       try {
-        return JSON.parse(text) as T;
+        return JSON.parse(extractJsonText(text)) as T;
       } catch (err) {
         throw new JsonParseError(`invalid json in model output: ${(err as Error).message}`);
       }

@@ -10,6 +10,26 @@ export interface OpenAICompatibleConfig {
 const REQUEST_TIMEOUT_MS = 60_000;
 
 /**
+ * Some gateways/models wrap JSON in markdown fences (```json ... ```) or add
+ * prose around it even when response_format json_object is requested. Strip
+ * everything outside the outermost JSON object/array before parsing.
+ */
+export function extractJsonText(raw: string): string {
+  let text = raw.trim();
+  const fence = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(text);
+  if (fence) text = fence[1].trim();
+  const firstObj = text.indexOf("{");
+  const firstArr = text.indexOf("[");
+  const start = firstObj === -1 ? firstArr : firstArr === -1 ? firstObj : Math.min(firstObj, firstArr);
+  if (start > 0) text = text.slice(start);
+  const lastObj = text.lastIndexOf("}");
+  const lastArr = text.lastIndexOf("]");
+  const end = Math.max(lastObj, lastArr);
+  if (end !== -1 && end < text.length - 1) text = text.slice(0, end + 1);
+  return text;
+}
+
+/**
  * Adapter for OpenAI-compatible chat-completions endpoints (OpenRouter, Groq,
  * Mistral, APInex, ...). Requests JSON via response_format json_object — the
  * same structured-output contract every pipeline stage depends on. HTTP
@@ -65,7 +85,7 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
         throw new JsonParseError("provider returned empty content");
       }
       try {
-        return JSON.parse(content) as T;
+        return JSON.parse(extractJsonText(content)) as T;
       } catch (err) {
         throw new JsonParseError(`invalid json in model output: ${(err as Error).message}`);
       }
