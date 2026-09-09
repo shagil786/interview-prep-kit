@@ -24,7 +24,7 @@ interface RequirementLike {
 }
 
 export const PROMPTS = {
-  extractRequirements(jd: string): { system: string; prompt: string } {
+  extractRequirements(jd: string, extraInstruction?: string): { system: string; prompt: string } {
     return {
       system: systemPrompt(
         "Extract structured role information and requirements from the job description. " +
@@ -33,8 +33,11 @@ export const PROMPTS = {
           "kind: technical (skills, tools, engineering practice), behavioural (collaboration, leadership, communication), domain (industry/domain knowledge). " +
           "Never invent a requirement the text does not contain. If the description has almost no detail, return an empty requirements array with best-effort role fields.",
       ),
+      // extraInstruction is placed OUTSIDE the untrusted data block so it is a
+      // genuine instruction, not data the model is told to ignore.
       prompt:
         dataBlock("job-description", jd) +
+        (extraInstruction ? `\n${extraInstruction}\n` : "") +
         '\nReturn JSON: {"title": string, "seniority": "senior"|"mid"|"junior"|"unknown", "location": string, ' +
         '"requirements": [{"text": string, "kind": "technical"|"behavioural"|"domain", "priority": "must"|"nice"}]}',
     };
@@ -71,7 +74,7 @@ export const PROMPTS = {
       "system-design":
         "Write system design / architecture questions appropriate to the role's seniority and the requirements. Prefer open-ended design prompts with a clear focus.",
       "company-fit":
-        "Write questions about the company's business, product, and culture grounded ONLY in the provided excerpts, so a candidate can show they did their homework.",
+        "Write questions about the company's business, product, culture, and hiring process grounded ONLY in the provided materials (page excerpts and/or known hiring-process text), so a candidate can show they did their homework.",
     };
     return {
       system: systemPrompt(

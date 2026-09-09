@@ -60,6 +60,9 @@ describe("extractRequirements", () => {
     const out = await extractRequirements(longJd, provider);
     expect(calls).toBe(2);
     expect(out.requirements.map((r) => r.text)).toEqual(["Kubernetes"]);
-    expect(provider.calls[1].prompt).toContain("Strict instruction");
+    // The strict note must sit OUTSIDE the untrusted data block, otherwise the
+    // system preamble tells the model to ignore it.
+    const retryPrompt = provider.calls[1].prompt;
+    expect(retryPrompt.indexOf("Strict instruction")).toBeGreaterThan(retryPrompt.indexOf("</untrusted>"));
   });
 });

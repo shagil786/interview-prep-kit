@@ -11,20 +11,31 @@ export interface DraftFlashcard {
 /**
  * One call: flashcards covering must-have requirements and key facts behind the
  * generated questions. Output filtered to known requirement ids and non-empty
- * front/back.
+ * front/back. A single empty result is retried once (a model hiccup must not
+ * hollow out a kit); a genuinely empty second result passes through.
  */
 export async function generateFlashcards(
   args: { requirements: RequirementLike[]; questions: { id: string; prompt: string }[] },
   provider: LlmProvider,
 ): Promise<DraftFlashcard[]> {
   const { system, prompt } = PROMPTS.flashcards(args);
-  const raw = await provider.generateJson<{ flashcards?: { front?: unknown; back?: unknown; requirement_ids?: unknown }[] }>({
-    system,
-    prompt,
-  });
-  if (!Array.isArray(raw.flashcards)) return [];
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const raw = await provider.generateJson<{ flashcards?: { front?: unknown; back?: unknown; requirement_ids?: unknown }[] }>({
+      system,
+      prompt,
+    });
+    const out = normalize(raw, args.requirements);
+    if (out.length > 0 || args.requirements.length === 0) return out;
+  }
+  return [];
+}
 
-  const knownIds = new Set(args.requirements.map((r) => r.id));
+function normalize(
+  raw: { flashcards?: { front?: unknown; back?: unknown; requirement_ids?: unknown }[] },
+  requirements: RequirementLike[],
+): DraftFlashcard[] {
+  if (!Array.isArray(raw.flashcards)) return [];
+  const knownIds = new Set(requirements.map((r) => r.id));
   const out: DraftFlashcard[] = [];
   for (const f of raw.flashcards) {
     const front = typeof f?.front === "string" ? f.front.trim() : "";

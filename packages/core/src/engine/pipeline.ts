@@ -22,6 +22,8 @@ import { runCoverageLoop } from "../stages/cover.js";
 import { balanceEmptyCategories, findDuplicatePairs, pickKeep } from "../stages/balance.js";
 import { buildSchedule } from "../schedule/schedule.js";
 import { Job } from "./job.js";
+import { createResilientProvider } from "./resilient.js";
+import type { RateLimiter } from "./rateLimit.js";
 
 export type PipelineErrorCode =
   | "COMPANY_UNREACHABLE"
@@ -53,6 +55,8 @@ export interface PipelineDeps {
   isAllowed?: (url: URL) => Promise<boolean>;
   crawlDelayMs?: () => Promise<number>;
   isPrivateHost?: (hostname: string) => boolean;
+  /** Shared free-tier pacing. When supplied, every LLM call first acquires a token. */
+  rateLimiter?: RateLimiter;
   onProgress?: (job: Job) => void;
 }
 
@@ -100,8 +104,12 @@ export async function runPipeline(input: CaseInput, deps: PipelineDeps): Promise
   const delayFn = deps.crawlDelayMs ?? (async () => crawlDelayFor(url, textFetcher));
   const isPrivate = deps.isPrivateHost ?? isPrivateHostname;
 
+  // Free-tier survival layer: pacing + backoff on retryable errors + one fresh
+  // draw on parse failures — applied to every LLM call in this pipeline.
+  const provider = createResilientProvider(deps.provider, { rateLimiter: deps.rateLimiter });
+
   job.begin("extract", "Extracting requirements from the job description");
-  const extracted = await extractRequirements(input.jd, deps.provider);
+  const extracted = await extractRequirements(input.jd, provider);
   const requirements = extracted.requirements.map(toRequirementLike);
   job.succeed(`${requirements.length} requirement(s) extracted`);
   progress();
@@ -126,7 +134,7 @@ export async function runPipeline(input: CaseInput, deps: PipelineDeps): Promise
   progress();
 
   job.begin("brief", "Writing the company brief");
-  const brief: BriefResult = await generateBrief(research, deps.provider);
+  const brief: BriefResult = await generateBrief(research, provider);
   job.succeed();
   progress();
 
@@ -141,7 +149,7 @@ export async function runPipeline(input: CaseInput, deps: PipelineDeps): Promise
         hiringProcess: research.hiring_process,
         companyExcerpts: research.what_they_do_excerpts,
       },
-      deps.provider,
+      provider,
     );
 
   let questions: DraftQuestion[] = [];
@@ -209,7 +217,7 @@ export async function runPipeline(input: CaseInput, deps: PipelineDeps): Promise
   job.begin("flashcards", "Generating flashcards");
   const draftFlashcards = await generateFlashcards(
     { requirements, questions: questionsWithIds.map((q) => ({ id: q.id, prompt: q.prompt })) },
-    deps.provider,
+    provider,
   );
   const fIds: string[] = [];
   const flashcards = draftFlashcards.map((f) => {

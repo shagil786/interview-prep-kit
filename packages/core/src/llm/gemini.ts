@@ -21,18 +21,29 @@ export function createGeminiProvider(config: GeminiConfig): LlmProvider {
   return {
     async generateJson<T>(opts: LlmGenerateOpts): Promise<T> {
       const url = `${base}/models/${encodeURIComponent(config.model)}:generateContent?key=${encodeURIComponent(config.apiKey)}`;
-      const res = await doFetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: opts.system }] },
-          contents: [{ role: "user", parts: [{ text: opts.prompt }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: opts.temperature ?? 0.2,
-          },
-        }),
-      });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 60_000);
+      let res: Response;
+      try {
+        res = await doFetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: opts.system }] },
+            contents: [{ role: "user", parts: [{ text: opts.prompt }] }],
+            generationConfig: {
+              responseMimeType: "application/json",
+              temperature: opts.temperature ?? 0.2,
+            },
+          }),
+        });
+      } catch (err) {
+        clearTimeout(timer);
+        if (controller.signal.aborted) throw new ProviderError("gemini request timed out", 0, true);
+        throw new ProviderError(`gemini network error: ${(err as Error).message}`, 0, true);
+      }
+      clearTimeout(timer);
       if (!res.ok) {
         throw new ProviderError(`gemini http ${res.status}`, res.status, res.status === 429 || res.status >= 500);
       }

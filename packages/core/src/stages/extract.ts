@@ -62,7 +62,7 @@ const RETRY_NOTE =
 export async function extractRequirements(jd: string, provider: LlmProvider): Promise<ExtractResult> {
   const first = normalize(await provider.generateJson<RawExtract>(PROMPTS.extractRequirements(jd)));
   if (first.requirements.length === 0 && jd.trim().length >= 40) {
-    const retry = PROMPTS.extractRequirements(jd + RETRY_NOTE);
+    const retry = PROMPTS.extractRequirements(jd, RETRY_NOTE);
     return normalize(await provider.generateJson<RawExtract>(retry));
   }
   return first;

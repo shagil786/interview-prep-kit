@@ -105,6 +105,9 @@ export async function researchCompany(input: { company_url: string }, deps: Rese
   } else {
     const company = hostLabel(input.company_url);
     const queries = company ? [`${company} interview process`, `${company} interview`] : [];
+    // Dedupe + cap across BOTH queries: a URL surfaced twice is fetched once.
+    const known = new Set(crawled.map((p) => p.url));
+    let fetches = 0;
     for (const q of queries) {
       let results: SearchResult[] = [];
       try {
@@ -113,8 +116,6 @@ export async function researchCompany(input: { company_url: string }, deps: Rese
         unknowns.push(`public discussion search failed: ${(err as Error).message}`);
         continue;
       }
-      const known = new Set(crawled.map((p) => p.url));
-      let fetches = 0;
       for (const r of results) {
         if (fetches >= MAX_DISCUSSION_FETCHES) break;
         if (known.has(r.url)) continue;
