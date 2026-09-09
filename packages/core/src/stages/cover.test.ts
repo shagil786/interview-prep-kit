@@ -46,7 +46,8 @@ describe("runCoverageLoop", () => {
     });
     expect(result.passes).toBe(2);
     expect(result.questions.map((x) => x.requirement_ids[0])).toContain("r1");
-    expect(result.uncovered).toEqual([]);
+    // Musts are closed; the nice-only r2 gap is reported honestly.
+    expect(result.uncovered).toEqual(["r2"]);
   });
 
   it("stops after maxRepairPasses when the generator cannot close a gap", async () => {
