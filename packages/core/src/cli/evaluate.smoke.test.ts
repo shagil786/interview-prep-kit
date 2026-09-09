@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 import { runBatch } from "./evaluate.js";
 import { providerFromEnv } from "../llm/factory.js";
-import { createFakeSearch, createSearch } from "../retrieval/search.js";
+import { searchFromEnv } from "../retrieval/searchFactory.js";
 import { createFetcher } from "../retrieval/fetch.js";
 import { TokenBucketLimiter } from "../engine/rateLimit.js";
 import { companySite, companySiteWithHandbook, startFixtureServer } from "../fixtures/server.js";
@@ -26,9 +26,8 @@ describe.skipIf(!enabled)("evaluate smoke (real LLM, RUN_SMOKE=1)", () => {
       const rpm = Number(process.env.PREP_RPM ?? 12) || 12;
       const limiter = new TokenBucketLimiter({ capacity: Math.max(4, Math.floor(rpm / 3)), refillPerSec: rpm / 60 });
       const fetcher = createFetcher();
-      const braveKey = process.env.BRAVE_API_KEY?.trim();
-      // Mirror the real CLI: no Brave key => honest no-op search, not a crash.
-      const search = braveKey ? createSearch(braveKey) : createFakeSearch(() => []);
+      // Mirror the real CLI: missing search key => honest no-op search, not a crash.
+      const search = searchFromEnv(process.env).search;
       const deps: PipelineDeps = {
         provider,
         search,

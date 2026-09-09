@@ -1,9 +1,8 @@
 import {
-  createFakeSearch,
   createFetcher,
   createResilientProvider,
-  createSearch,
   providerFromEnv,
+  searchFromEnv,
   TokenBucketLimiter,
   type LlmProvider,
   type PipelineDeps,
@@ -29,10 +28,9 @@ const sharedLimiter = new TokenBucketLimiter({
 
 /** Build provider/search/fetch from env, mirroring the CLI's defaults. */
 export function envServices(env: NodeJS.ProcessEnv = process.env): EnvServices {
-  const braveKey = env.BRAVE_API_KEY?.trim();
   const rawProvider: LlmProvider = providerFromEnv(env);
   const provider = createResilientProvider(rawProvider, { rateLimiter: sharedLimiter });
-  const search: SearchLike = braveKey ? createSearch(braveKey) : createFakeSearch(() => []);
+  const search: SearchLike = searchFromEnv(env).search;
   return {
     provider,
     rawProvider,

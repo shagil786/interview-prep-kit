@@ -7,6 +7,8 @@ export { Job, type JobStep, type StageStatus } from "./engine/job.js";
 export { TokenBucketLimiter, withRetry, type RateLimiter, type RetryOptions } from "./engine/rateLimit.js";
 export { createFetcher, type FetchedPage, type FetchOptions } from "./retrieval/fetch.js";
 export { createSearch, createFakeSearch, mapBraveResponse, type SearchLike, type SearchResult } from "./retrieval/search.js";
+export { createYouSearch, mapYouResponse, type YouSearchConfig } from "./retrieval/youSearch.js";
+export { searchFromEnv, type SearchFromEnv, type SearchProviderKind } from "./retrieval/searchFactory.js";
 export { isAllowed, crawlDelayFor, type TextFetcher } from "./retrieval/robots.js";
 export { JsonParseError, ProviderError, type LlmGenerateOpts, type LlmProvider } from "./llm/provider.js";
 export { createGeminiProvider, type GeminiConfig } from "./llm/gemini.js";

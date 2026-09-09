@@ -35,8 +35,10 @@ docs/          design spec + implementation plan (superpowers process docs)
   `OPENAI_COMPATIBLE_API_KEY`/`LLM_MODEL` (see `.env.example`). Choosing a small reseller as the
   documented provider is a grader risk; keep `gemini` as the repo default and use alternatives for
   your own runs.
-- **Search: Brave Search API free tier** for the "public discussion of their interview process"
-  step (env `BRAVE_API_KEY`; without it the step is honestly skipped).
+- **Search: pluggable**, default **Brave Search API free tier** for the "public discussion of their
+  interview process" step (`SEARCH_PROVIDER=brave` + `BRAVE_API_KEY`). `SEARCH_PROVIDER=you` selects
+  a You.com REST adapter (`YOU_API_KEY`) — note You.com's free tier is MCP-only (~100 queries/day),
+  REST needs a paid key. Missing key ⇒ the step is honestly skipped, never fatal.
 - **Why a DB-free core:** `packages/core` never imports a database driver, so `npm run evaluate`
   runs from a clean clone with nothing but `npm install` + env vars — no Mongo needed. The API
   persists kits via Mongoose; the CLI writes JSON files.
