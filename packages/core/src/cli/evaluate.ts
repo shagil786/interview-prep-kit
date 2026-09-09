@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { createFetcher } from "../retrieval/fetch.js";
-import { createGeminiProvider } from "../llm/gemini.js";
+import { providerFromEnv } from "../llm/factory.js";
+import type { LlmProvider } from "../llm/provider.js";
 import { createFakeSearch, createSearch } from "../retrieval/search.js";
 import { TokenBucketLimiter } from "../engine/rateLimit.js";
 import { runPipeline, type PipelineDeps } from "../engine/pipeline.js";
@@ -73,9 +74,11 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv, log: (line: s
     return 2;
   }
 
-  const geminiKey = env.GEMINI_API_KEY?.trim();
-  if (!geminiKey) {
-    log("error: GEMINI_API_KEY is not set (see .env.example)");
+  let provider: LlmProvider;
+  try {
+    provider = providerFromEnv(env);
+  } catch (err) {
+    log(`error: ${(err as Error).message}`);
     return 2;
   }
   const braveKey = env.BRAVE_API_KEY?.trim();
@@ -93,8 +96,6 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv, log: (line: s
     return 2;
   }
 
-  const model = env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
-  const provider = createGeminiProvider({ apiKey: geminiKey, model });
   const rpm = Number(env.PREP_RPM ?? 12) || 12;
   const limiter = new TokenBucketLimiter({ capacity: Math.max(4, Math.floor(rpm / 3)), refillPerSec: rpm / 60 });
   const fetcher = createFetcher();

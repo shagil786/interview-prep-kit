@@ -10,6 +10,8 @@ export { createSearch, createFakeSearch, mapBraveResponse, type SearchLike, type
 export { isAllowed, crawlDelayFor, type TextFetcher } from "./retrieval/robots.js";
 export { JsonParseError, ProviderError, type LlmGenerateOpts, type LlmProvider } from "./llm/provider.js";
 export { createGeminiProvider, type GeminiConfig } from "./llm/gemini.js";
+export { createOpenAICompatibleProvider, type OpenAICompatibleConfig } from "./llm/openaiCompatible.js";
+export { providerFromEnv, DEFAULT_GEMINI_MODEL, DEFAULT_OPENAI_MODEL, type LlmProviderKind } from "./llm/factory.js";
 export { createFakeProvider } from "./llm/fake.js";
 export { PROMPTS, dataBlock, UNTRUSTED_PREAMBLE } from "./llm/prompts.js";
 export { repairJson } from "./llm/repair.js";

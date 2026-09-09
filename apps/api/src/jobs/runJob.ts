@@ -24,9 +24,9 @@ export async function runJob(kitId: string, deps?: PipelineDeps): Promise<void> 
     if (!doc) return;
     if (doc.status !== "generating") return;
 
-    const pipelineDeps = deps ?? pipelineDepsFromEnv();
-    const input = { id: kitId, jd: doc.caseInput.jd, company_url: doc.caseInput.company_url, days: doc.caseInput.days };
     try {
+      const pipelineDeps = deps ?? pipelineDepsFromEnv();
+      const input = { id: kitId, jd: doc.caseInput.jd, company_url: doc.caseInput.company_url, days: doc.caseInput.days };
       const { kit, job } = await pipelineImpl(input, {
         ...pipelineDeps,
         onProgress: (j) => {
