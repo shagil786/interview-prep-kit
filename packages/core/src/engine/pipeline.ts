@@ -27,6 +27,7 @@ import type { RateLimiter } from "./rateLimit.js";
 
 export type PipelineErrorCode =
   | "COMPANY_UNREACHABLE"
+  | "INVALID_INPUT"
   | "GENERATION_FAILED"
   | "INVALID_KIT"
   | "PROVIDER_RATE_LIMITED";
