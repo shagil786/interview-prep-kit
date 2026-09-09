@@ -7,3 +7,8 @@ dist/
 .DS_Store
 coverage/
 !packages/core/src/coverage/
+
+# zcode/skills local artifacts
+.agents/
+skills-lock.json
+.superpowers/
