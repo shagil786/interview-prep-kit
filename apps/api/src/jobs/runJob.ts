@@ -36,7 +36,7 @@ export async function runJob(kitId: string, deps?: PipelineDeps): Promise<void> 
     try {
       const pipelineDeps = deps ?? pipelineDepsFromEnv();
       const input = { id: kitId, jd: doc.caseInput.jd, company_url: doc.caseInput.company_url, days: doc.caseInput.days };
-      const { kit, job } = await pipelineImpl(input, {
+      const { kit, job, research } = await pipelineImpl(input, {
         ...pipelineDeps,
         onProgress: (j) => {
           void persist({ job: { steps: jobToSteps(j) } });
@@ -46,7 +46,7 @@ export async function runJob(kitId: string, deps?: PipelineDeps): Promise<void> 
       await persist({
         kit,
         overlay: overlayFor(kit),
-        research: { pages_used: kit.source.pages_used },
+        research,
         job: { steps: jobToSteps(job) },
         status: "ready",
         error: null,

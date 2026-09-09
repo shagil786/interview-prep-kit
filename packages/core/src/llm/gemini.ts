@@ -21,6 +21,7 @@ export function createGeminiProvider(config: GeminiConfig): LlmProvider {
 
   return {
     async generateJson<T>(opts: LlmGenerateOpts): Promise<T> {
+      const startedAt = Date.now();
       const url = `${base}/models/${encodeURIComponent(config.model)}:generateContent?key=${encodeURIComponent(config.apiKey)}`;
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 60_000);
@@ -36,6 +37,7 @@ export function createGeminiProvider(config: GeminiConfig): LlmProvider {
             generationConfig: {
               responseMimeType: "application/json",
               temperature: opts.temperature ?? 0.2,
+              ...(opts.maxTokens ? { maxOutputTokens: opts.maxTokens } : {}),
             },
           }),
         });
@@ -48,17 +50,26 @@ export function createGeminiProvider(config: GeminiConfig): LlmProvider {
       if (!res.ok) {
         throw new ProviderError(`gemini http ${res.status}`, res.status, res.status === 429 || res.status >= 500);
       }
-      let payload: unknown;
+      let payload: {
+        candidates?: { content?: { parts?: { text?: unknown }[] } }[];
+        usageMetadata?: { promptTokenCount?: unknown; candidatesTokenCount?: unknown };
+      };
       try {
-        payload = await res.json();
+        payload = (await res.json()) as typeof payload;
       } catch {
         throw new JsonParseError("gemini returned a non-JSON error body");
       }
-      const text = (payload as { candidates?: { content?: { parts?: { text?: unknown }[] } }[] })
-        ?.candidates?.[0]?.content?.parts?.[0]?.text;
+      const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (typeof text !== "string" || text.trim().length === 0) {
         throw new JsonParseError("gemini returned empty candidate text");
       }
+      const um = payload.usageMetadata;
+      opts.onUsage?.({
+        model: config.model,
+        inputTokens: typeof um?.promptTokenCount === "number" ? um.promptTokenCount : 0,
+        outputTokens: typeof um?.candidatesTokenCount === "number" ? um.candidatesTokenCount : 0,
+        latencyMs: Date.now() - startedAt,
+      });
       try {
         return JSON.parse(extractJsonText(text)) as T;
       } catch (err) {

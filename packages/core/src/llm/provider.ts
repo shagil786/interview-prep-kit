@@ -1,9 +1,20 @@
+export interface LlmUsage {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  latencyMs: number;
+}
+
 export interface LlmGenerateOpts {
   system: string;
   prompt: string;
   /** Provider-specific schema hint (Gemini REST path ignores it; kept for portability). */
   jsonSchema?: unknown;
   temperature?: number;
+  /** Cap on generated tokens; providers default to a sane bound for JSON stages. */
+  maxTokens?: number;
+  /** Optional observability hook: invoked with token/latency stats after the call. */
+  onUsage?: (usage: LlmUsage) => void;
 }
 
 export interface LlmProvider {

@@ -83,7 +83,7 @@ export async function generateQuestionsForCategory(
     hiringProcessText: args.hiringProcess?.text,
     companyExcerpts: args.companyExcerpts,
   });
-  const raw = await provider.generateJson<{ questions?: RawQuestion[] }>({ system, prompt });
+  const raw = await provider.generateJson<{ questions?: RawQuestion[] }>({ system, prompt, maxTokens: 3000 });
   if (!Array.isArray(raw.questions)) return [];
 
   const knownIds = new Set(args.requirements.map((r) => r.id));

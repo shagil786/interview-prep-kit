@@ -22,7 +22,7 @@ import { runCoverageLoop } from "../stages/cover.js";
 import { balanceEmptyCategories, findDuplicatePairs, pickKeep } from "../stages/balance.js";
 import { buildSchedule } from "../schedule/schedule.js";
 import { Job } from "./job.js";
-import { createResilientProvider } from "./resilient.js";
+import { createResilientProvider, UsageRecorder } from "./resilient.js";
 import type { RateLimiter } from "./rateLimit.js";
 
 export type PipelineErrorCode =
@@ -80,7 +80,16 @@ function toRequirementLike(r: ExtractedRequirement): RequirementLike {
  * -> coverage loop -> duplicate trim -> balance -> schedule -> validate.
  * The exact same function powers the API job runner and `npm run evaluate`.
  */
-export async function runPipeline(input: CaseInput, deps: PipelineDeps): Promise<{ kit: Kit; job: Job }> {
+export interface PipelineResult {
+  kit: Kit;
+  job: Job;
+  /** Token/latency accounting for the run (observability). */
+  usage: ReturnType<UsageRecorder["toJSON"]>;
+  /** Research trail (pages, excerpts, hiring process, unknowns) for reuse. */
+  research: ResearchFinding;
+}
+
+export async function runPipeline(input: CaseInput, deps: PipelineDeps): Promise<PipelineResult> {
   const job = new Job();
   const progress = () => deps.onProgress?.(job);
 
@@ -107,15 +116,22 @@ export async function runPipeline(input: CaseInput, deps: PipelineDeps): Promise
 
   // Free-tier survival layer: pacing + backoff on retryable errors + one fresh
   // draw on parse failures — applied to every LLM call in this pipeline.
-  const provider = createResilientProvider(deps.provider, { rateLimiter: deps.rateLimiter });
+  // The recorder accumulates per-stage token/latency usage for observability.
+  const recorder = new UsageRecorder();
+  const usage = { stage: "extract", recorder };
+  const provider = createResilientProvider(deps.provider, { rateLimiter: deps.rateLimiter }, usage);
+  const begin = (stage: string, label: string) => {
+    usage.stage = stage;
+    job.begin(stage, label);
+  };
 
-  job.begin("extract", "Extracting requirements from the job description");
+  begin("extract", "Extracting requirements from the job description");
   const extracted = await extractRequirements(input.jd, provider);
   const requirements = extracted.requirements.map(toRequirementLike);
   job.succeed(`${requirements.length} requirement(s) extracted`);
   progress();
 
-  job.begin("research", "Crawling the company site and searching public discussion");
+  begin("research", "Crawling the company site and searching public discussion");
   const research: ResearchFinding = await researchCompany(
     { company_url: input.company_url },
     {
@@ -134,12 +150,12 @@ export async function runPipeline(input: CaseInput, deps: PipelineDeps): Promise
   job.succeed(`${research.pages_used.length} page(s) used; ${hiringNote}`);
   progress();
 
-  job.begin("brief", "Writing the company brief");
+  begin("brief", "Writing the company brief");
   const brief: BriefResult = await generateBrief(research, provider);
   job.succeed();
   progress();
 
-  job.begin("questions", "Generating questions per category");
+  begin("questions", "Generating questions per category");
   const categories = categoriesFor(requirements, research);
   const adapter = (category: QuestionCategory, targets: RequirementLike[]) =>
     generateQuestionsForCategory(
@@ -215,7 +231,7 @@ export async function runPipeline(input: CaseInput, deps: PipelineDeps): Promise
   for (const q of questionsWithIds) for (const rid of q.requirement_ids) covered.add(rid);
   const coverageUncovered = requirements.filter((r) => !covered.has(r.id)).map((r) => r.id);
 
-  job.begin("flashcards", "Generating flashcards");
+  begin("flashcards", "Generating flashcards");
   const draftFlashcards = await generateFlashcards(
     { requirements, questions: questionsWithIds.map((q) => ({ id: q.id, prompt: q.prompt })) },
     provider,
@@ -235,7 +251,7 @@ export async function runPipeline(input: CaseInput, deps: PipelineDeps): Promise
   job.succeed(`${flashcards.length} flashcard(s)`);
   progress();
 
-  job.begin("schedule", "Allocating the study schedule");
+  begin("schedule", "Allocating the study schedule");
   const schedule = buildSchedule({ requirements, questions: questionsWithIds, days: input.days });
   job.succeed(`${schedule.days.length} day(s) allocated`);
   progress();
@@ -278,7 +294,7 @@ export async function runPipeline(input: CaseInput, deps: PipelineDeps): Promise
     },
   };
 
-  job.begin("validate", "Validating kit structure");
+  begin("validate", "Validating kit structure");
   const violations = validateKit(kit);
   if (violations.length > 0) {
     job.fail(violations.join("; "));
@@ -288,5 +304,5 @@ export async function runPipeline(input: CaseInput, deps: PipelineDeps): Promise
   job.succeed("kit valid");
   progress();
 
-  return { kit, job };
+  return { kit, job, usage: recorder.toJSON(), research };
 }

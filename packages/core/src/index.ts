@@ -34,5 +34,5 @@ export { balanceEmptyCategories, findDuplicatePairs, pickKeep } from "./stages/b
 export { extractRequirements, type ExtractResult, type ExtractedRequirement } from "./stages/extract.js";
 export { buildSchedule, type Schedule, type ScheduleDay, type ScheduleInput } from "./schedule/schedule.js";
 export { findUncovered } from "./coverage/coverage.js";
-export { createResilientProvider, type ResilientProviderOptions } from "./engine/resilient.js";
+export { createResilientProvider, UsageRecorder, type ResilientProviderOptions, type StageUsage } from "./engine/resilient.js";
 export { PipelineError, runPipeline, type CaseInput, type PipelineDeps, type PipelineErrorCode } from "./engine/pipeline.js";

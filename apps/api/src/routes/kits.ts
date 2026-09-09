@@ -176,6 +176,8 @@ kitsRouter.post("/:kitId/regenerate", async (req: Request, res: Response) => {
       doc.caseInput,
       parsed.data.scope as RegenerateScope,
       parsed.data.category,
+      undefined,
+      doc.research,
     );
     doc.kit = result.kit;
     doc.overlay = result.overlay;

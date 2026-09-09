@@ -48,9 +48,9 @@ export async function runBatch(cases: CaseRow[], deps: PipelineDeps, log: (line:
       },
     };
     try {
-      const { kit } = await runPipeline({ id: c.id, jd: c.jd, company_url: c.company_url, days: c.days }, perCaseDeps);
+      const { kit, usage } = await runPipeline({ id: c.id, jd: c.jd, company_url: c.company_url, days: c.days }, perCaseDeps);
       kits.push({ id: c.id, status: "ok", kit, error: null });
-      log(`[${c.id}] ok`);
+      log(`[${c.id}] ok — ${usage.calls} LLM call(s), ~${usage.inputTokens + usage.outputTokens} tokens, ${(usage.latencyMs / 1000).toFixed(1)}s`);
     } catch (err) {
       const code = errorCode(err);
       kits.push({ id: c.id, status: "failed", kit: null, error: code });

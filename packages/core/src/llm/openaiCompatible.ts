@@ -42,6 +42,7 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
 
   return {
     async generateJson<T>(opts: LlmGenerateOpts): Promise<T> {
+      const startedAt = Date.now();
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
       let res: Response;
@@ -60,6 +61,7 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
               { role: "user", content: opts.prompt },
             ],
             temperature: opts.temperature ?? 0.2,
+            ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
             response_format: { type: "json_object" },
           }),
         });
@@ -73,17 +75,26 @@ export function createOpenAICompatibleProvider(config: OpenAICompatibleConfig): 
       if (!res.ok) {
         throw new ProviderError(`provider http ${res.status}`, res.status, res.status === 429 || res.status >= 500);
       }
-      let payload: unknown;
+      let payload: {
+        choices?: { message?: { content?: unknown } }[];
+        usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
+      };
       try {
-        payload = await res.json();
+        payload = (await res.json()) as typeof payload;
       } catch {
         throw new JsonParseError("provider returned a non-JSON error body");
       }
-      const content = (payload as { choices?: { message?: { content?: unknown } }[] })?.choices?.[0]?.message
-        ?.content;
+      const content = payload?.choices?.[0]?.message?.content;
       if (typeof content !== "string" || content.trim().length === 0) {
         throw new JsonParseError("provider returned empty content");
       }
+      const usage = payload.usage;
+      opts.onUsage?.({
+        model: config.model,
+        inputTokens: typeof usage?.prompt_tokens === "number" ? usage.prompt_tokens : 0,
+        outputTokens: typeof usage?.completion_tokens === "number" ? usage.completion_tokens : 0,
+        latencyMs: Date.now() - startedAt,
+      });
       try {
         return JSON.parse(extractJsonText(content)) as T;
       } catch (err) {

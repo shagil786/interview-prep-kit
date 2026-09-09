@@ -60,7 +60,7 @@ const RETRY_NOTE =
  * description triggers one stricter retry, then passes through honestly.
  */
 export async function extractRequirements(jd: string, provider: LlmProvider): Promise<ExtractResult> {
-  const first = normalize(await provider.generateJson<RawExtract>(PROMPTS.extractRequirements(jd)));
+  const first = normalize(await provider.generateJson<RawExtract>({ ...PROMPTS.extractRequirements(jd), maxTokens: 1500 }));
   if (first.requirements.length === 0 && jd.trim().length >= 40) {
     const retry = PROMPTS.extractRequirements(jd, RETRY_NOTE);
     return normalize(await provider.generateJson<RawExtract>(retry));

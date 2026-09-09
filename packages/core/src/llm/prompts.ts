@@ -23,6 +23,18 @@ interface RequirementLike {
   priority: "must" | "nice";
 }
 
+/**
+ * Research context for QUESTION generation is digested (first ~900 chars per
+ * excerpt) rather than re-sent in full. The brief stage — the one call that
+ * needs deep grounding — still receives the complete excerpts. Keeps a full
+ * kit run inside small free-tier token allowances without losing the signal
+ * (process facts and company identity sit early in cleaned text).
+ */
+const DIGEST_CHARS = 900;
+export function digest(text: string): string {
+  return text.length > DIGEST_CHARS ? text.slice(0, DIGEST_CHARS) + "…" : text;
+}
+
 export const PROMPTS = {
   extractRequirements(jd: string, extraInstruction?: string): { system: string; prompt: string } {
     return {
@@ -87,11 +99,11 @@ export const PROMPTS = {
         "Requirements:\n" +
         args.requirements.map((r) => `- ${r.id}: [${r.kind}/${r.priority}] ${r.text}`).join("\n") +
         (args.hiringProcessText
-          ? `\n\nKnown hiring process:\n${dataBlock("hiring-process", args.hiringProcessText)}`
+          ? `\n\nKnown hiring process:\n${dataBlock("hiring-process", digest(args.hiringProcessText))}`
           : "\n\n(no hiring-process information was found)") +
         (args.companyExcerpts && args.companyExcerpts.length > 0
           ? "\n\nCompany pages:\n" +
-            args.companyExcerpts.map((e) => dataBlock(`page ${e.url}`, e.text)).join("\n")
+            args.companyExcerpts.map((e) => dataBlock(`page ${e.url}`, digest(e.text))).join("\n")
           : "") +
         '\nReturn JSON: {"questions": [{"requirement_ids": [string], "prompt": string, "answer_outline": string, "difficulty": number}]}',
     };

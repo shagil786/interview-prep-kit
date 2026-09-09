@@ -47,7 +47,7 @@ export async function generateBrief(finding: ResearchFinding, provider: LlmProvi
   }
 
   const { system, prompt } = PROMPTS.companyBrief(pages);
-  const raw = await provider.generateJson<RawBrief>({ system, prompt });
+  const raw = await provider.generateJson<RawBrief>({ system, prompt, maxTokens: 1200 });
 
   const realUrls = new Set(pages.map((p) => p.url));
   const sources = Array.isArray(raw.sources)

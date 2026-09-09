@@ -23,6 +23,7 @@ export async function generateFlashcards(
     const raw = await provider.generateJson<{ flashcards?: { front?: unknown; back?: unknown; requirement_ids?: unknown }[] }>({
       system,
       prompt,
+      maxTokens: 2500,
     });
     const out = normalize(raw, args.requirements);
     if (out.length > 0 || args.requirements.length === 0) return out;

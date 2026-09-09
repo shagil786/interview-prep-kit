@@ -13,7 +13,7 @@ import {
   type QuestionCategory,
   type RequirementLike,
 } from "@prep/core";
-import { createResilientProvider } from "@prep/core";
+import { createResilientProvider, type ResearchFinding } from "@prep/core";
 import { pipelineDepsFromEnv } from "../jobs/envDeps.js";
 import { isReplaceable, type Overlay } from "../edit/overlay.js";
 
@@ -30,6 +30,13 @@ function asRequirementLike(kit: Kit): RequirementLike[] {
  * References stay consistent because the schedule + coverage are recomputed
  * deterministically from the shipped question set afterwards.
  */
+/** Stored research trail shape check — older docs (or partial writes) fall
+ * back to a fresh crawl instead of breaking regeneration. */
+export function isResearchFinding(value: unknown): value is ResearchFinding {
+  const v = value as Partial<ResearchFinding> | null;
+  return !!v && Array.isArray(v.pages_used) && Array.isArray(v.what_they_do_excerpts) && Array.isArray(v.unknowns);
+}
+
 export async function regenerate(
   kit: Kit,
   overlay: Overlay,
@@ -37,6 +44,7 @@ export async function regenerate(
   scope: RegenerateScope,
   category?: QuestionCategory,
   deps?: PipelineDeps,
+  storedResearch?: unknown,
 ): Promise<{ kit: Kit; overlay: Overlay }> {
   const next = structuredClone(kit) as Kit;
   const nextOverlay: Overlay = {
@@ -57,7 +65,11 @@ export async function regenerate(
 
   const services = deps ?? pipelineDepsFromEnv();
   const provider = deps?.rateLimiter ? createResilientProvider(deps.provider, { rateLimiter: deps.rateLimiter }) : services.provider;
-  const research = await runResearch(input.company_url, services);
+  // Reuse the research trail persisted by the generation job; re-crawl only
+  // when it is missing (e.g. kits created before trails were stored).
+  const research: ResearchFinding = isResearchFinding(storedResearch)
+    ? storedResearch
+    : await runResearch(input.company_url, services);
 
   if (scope === "brief") {
     const meta = nextOverlay.brief;
