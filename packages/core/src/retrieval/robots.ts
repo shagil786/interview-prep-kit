@@ -1,4 +1,9 @@
-import robotsParser from "robots-parser";
+import robotsParserCjs, { type Robot } from "robots-parser";
+
+// robots-parser ships CommonJS whose ambient typings use `export default`; under
+// NodeNext ESM the default import is typed as the module namespace, so cast to
+// the documented call signature (runtime shape is `module.exports = fn`).
+const robotsParser = robotsParserCjs as unknown as (url: string, robotsTxt: string) => Robot;
 
 export interface TextFetcher {
   fetchText(url: string): Promise<{ status: number; text: string; error?: string }>;
@@ -7,21 +12,21 @@ export interface TextFetcher {
 const UA = "PrepKitBot/0.1 (+https://github.com/interview-prep-kit)";
 const CACHE_TTL_MS = 10 * 60 * 1000;
 
-type RobotsEntry = { robots: ReturnType<typeof robotsParser> | null; at: number };
+type RobotsEntry = { robots: Robot | null; at: number };
 const cache = new Map<string, RobotsEntry>();
 
 function cacheKey(origin: string): string {
   return origin.toLowerCase();
 }
 
-async function loadRobots(originUrl: URL, fetcher: TextFetcher): Promise<ReturnType<typeof robotsParser> | null> {
+async function loadRobots(originUrl: URL, fetcher: TextFetcher): Promise<Robot | null> {
   const key = cacheKey(originUrl.origin);
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.robots;
 
   const robotsUrl = new URL("/robots.txt", originUrl.origin).href;
   const res = await fetcher.fetchText(robotsUrl);
-  let robots: ReturnType<typeof robotsParser> | null = null;
+  let robots: Robot | null = null;
   if (!res.error && res.status < 400 && res.status > 0) {
     robots = robotsParser(robotsUrl, res.text);
   }
@@ -29,11 +34,11 @@ async function loadRobots(originUrl: URL, fetcher: TextFetcher): Promise<ReturnT
   return robots;
 }
 
-/** True when robots.txt does not disallow the URL (missing robots.txt => allowed). */
+/** True when robots.txt does not disallow the URL (missing rules => allowed). */
 export async function isAllowed(url: URL, fetcher: TextFetcher): Promise<boolean> {
   const robots = await loadRobots(url, fetcher);
   if (!robots) return true;
-  return robots.isAllowed(url.href, UA);
+  return robots.isAllowed(url.href, UA) !== false;
 }
 
 /** Declared Crawl-delay for our user agent in milliseconds (0 when unset). */
@@ -48,3 +53,4 @@ export async function crawlDelayFor(origin: URL, fetcher: TextFetcher): Promise<
 export function clearRobotsCache(): void {
   cache.clear();
 }
+
