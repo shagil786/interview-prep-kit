@@ -10,6 +10,24 @@ describe("mapYouResponse", () => {
     expect(out).toEqual([{ title: "Acme interviews", url: "https://glassdoor.example/x", snippet: "details" }]);
   });
 
+  it("maps the verified live shape results.web[]", () => {
+    const out = mapYouResponse({
+      results: {
+        web: [
+          {
+            url: "https://dev.to/x/my-journey-to-gitlab",
+            title: "My journey to GitLab",
+            description: "my interview process at GitLab",
+            thumbnail_url: "https://img.example/t.png",
+          },
+        ],
+      },
+    });
+    expect(out).toEqual([
+      { title: "My journey to GitLab", url: "https://dev.to/x/my-journey-to-gitlab", snippet: "my interview process at GitLab" },
+    ]);
+  });
+
   it("accepts alternative containers and field spellings", () => {
     const out = mapYouResponse({
       hits: [{ name: "Blog", link: "https://blog.example/a", content: "text" }],
