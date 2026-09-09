@@ -28,9 +28,13 @@ docs/          design spec + implementation plan (superpowers process docs)
 
 - **Next.js + Tailwind (web), Node + Express (API), MongoDB, TypeScript** — the assessment's
   preferred stack. TypeScript everywhere for contract safety on the exact kit schema.
-- **LLM: Google Gemini (free tier)** — strong structured-JSON output and a generous free tier.
-  Model configurable via `GEMINI_MODEL` (default `gemini-2.5-flash`; probe the live model list if
-  404). No SDK — a small fetch-based adapter with typed retryable errors.
+- **LLM: provider-pluggable.** Default is **Google Gemini (free tier)** via a small fetch-based
+  adapter (no SDK) with typed retryable errors; model configurable via `GEMINI_MODEL`. A generic
+  **OpenAI-compatible** adapter (`createOpenAICompatibleProvider`) covers OpenRouter/Groq/Mistral/
+  APInex-style gateways — switch with `LLM_PROVIDER=openai-compatible` + `OPENAI_COMPATIBLE_BASE_URL`/
+  `OPENAI_COMPATIBLE_API_KEY`/`LLM_MODEL` (see `.env.example`). Choosing a small reseller as the
+  documented provider is a grader risk; keep `gemini` as the repo default and use alternatives for
+  your own runs.
 - **Search: Brave Search API free tier** for the "public discussion of their interview process"
   step (env `BRAVE_API_KEY`; without it the step is honestly skipped).
 - **Why a DB-free core:** `packages/core` never imports a database driver, so `npm run evaluate`

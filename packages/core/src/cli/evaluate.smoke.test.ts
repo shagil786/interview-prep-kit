@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { runBatch } from "./evaluate.js";
-import { createGeminiProvider } from "../llm/gemini.js";
+import { providerFromEnv } from "../llm/factory.js";
 import { createFakeSearch, createSearch } from "../retrieval/search.js";
 import { createFetcher } from "../retrieval/fetch.js";
 import { TokenBucketLimiter } from "../engine/rateLimit.js";
@@ -19,14 +19,10 @@ describe.skipIf(!enabled)("evaluate smoke (real LLM, RUN_SMOKE=1)", () => {
   it(
     "runs several cases end-to-end and returns only valid kits",
     async () => {
-      expect(process.env.GEMINI_API_KEY, "GEMINI_API_KEY required").toBeTruthy();
       const srvA = await startFixtureServer(companySiteWithHandbook());
       const srvB = await startFixtureServer(companySite());
       try {
-      const provider = createGeminiProvider({
-        apiKey: process.env.GEMINI_API_KEY!,
-        model: process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
-      });
+      const provider = providerFromEnv(process.env);
       const rpm = Number(process.env.PREP_RPM ?? 12) || 12;
       const limiter = new TokenBucketLimiter({ capacity: Math.max(4, Math.floor(rpm / 3)), refillPerSec: rpm / 60 });
       const fetcher = createFetcher();
