@@ -11,10 +11,12 @@ export interface AppConfig {
   mongoUri?: string;
   sessionSecret: string;
   corsOrigin?: string[];
+  secureCookies?: boolean;
 }
 
 export function createApp(config: AppConfig): Express {
   const app = express();
+  if (config.secureCookies) app.set("trust proxy", 1);
   app.use(helmet());
   app.use(
     cors({
@@ -40,7 +42,7 @@ export function createApp(config: AppConfig): Express {
       cookie: {
         httpOnly: true,
         sameSite: "lax",
-        secure: false, // set true behind a TLS-terminating proxy in production
+        secure: config.secureCookies ?? false,
         maxAge: 1000 * 60 * 60 * 24 * 14,
       },
     }),

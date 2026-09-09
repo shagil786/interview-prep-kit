@@ -220,12 +220,18 @@ export async function runPipeline(input: CaseInput, deps: PipelineDeps): Promise
     { requirements, questions: questionsWithIds.map((q) => ({ id: q.id, prompt: q.prompt })) },
     provider,
   );
-  const fIds: string[] = [];
-  const flashcards = draftFlashcards.map((f) => {
-    const id = appendId(fIds, "f");
-    fIds.push(id);
-    return { ...f, id };
-  });
+  let flashcards = draftFlashcards.map((f, i) => ({ ...f, id: `f${i + 1}` }));
+  if (flashcards.length === 0 && requirements.length > 0) {
+    // Deterministic fail-soft: one honest review card per must requirement so a
+    // model hiccup never hollows out the kit (schema requires >=1 flashcard).
+    const musts = requirements.filter((r) => r.priority === "must");
+    flashcards = (musts.length > 0 ? musts : requirements).map((r, i) => ({
+      front: `Explain: ${r.text}`,
+      back: "Review this requirement and be ready to give concrete examples.",
+      requirement_ids: [r.id],
+      id: `f${i + 1}`,
+    }));
+  }
   job.succeed(`${flashcards.length} flashcard(s)`);
   progress();
 

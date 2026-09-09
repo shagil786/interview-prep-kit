@@ -9,7 +9,7 @@ const corsOrigin = process.env.CORS_ORIGIN?.split(",").map((s) => s.trim()).filt
 
 async function start(): Promise<void> {
   if (mongoUri) await connectDb(mongoUri);
-  const app = createApp({ mongoUri, sessionSecret, corsOrigin });
+  const app = createApp({ mongoUri, sessionSecret, corsOrigin, secureCookies: (process.env.NODE_ENV ?? "").toLowerCase() === "production" });
   app.listen(port, () => {
     console.log(`prep api listening on http://0.0.0.0:${port}`);
     if (!mongoUri) console.warn("MONGODB_URI not set — running without persistence; sessions are in-memory.");

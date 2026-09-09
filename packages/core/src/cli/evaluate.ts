@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { createFetcher } from "../retrieval/fetch.js";
 import { createGeminiProvider } from "../llm/gemini.js";
 import { createFakeSearch, createSearch } from "../retrieval/search.js";
