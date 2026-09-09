@@ -29,7 +29,10 @@ export const coverageSchema = z.object({
   passes: z.number().int().min(1),
 });
 export const companyBriefSchema = z.object({
-  summary: z.string().min(1), what_they_do: z.string().min(1),
+  summary: z.string().min(1),
+  // what_they_do may legitimately be empty: an honest brief for a company we
+  // could not retrieve anything about says so in summary/unknowns instead.
+  what_they_do: z.string(),
   sources: z.array(z.string().url()),
   unknowns: z.array(z.string()).optional(), // allowed extension (spec §5.3)
 });
