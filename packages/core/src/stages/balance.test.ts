@@ -20,8 +20,8 @@ describe("findDuplicatePairs", () => {
   });
 
   it("is case/punctuation-insensitive", () => {
-    const a = { id: "x", requirement_ids: ["r1"], prompt: "How do you scale Node.js?" };
-    const b = { id: "y", requirement_ids: ["r1"], prompt: "How do you scale nodejs?" };
+    const a = { id: "x", requirement_ids: ["r1"], prompt: "How do you scale NODE services?" };
+    const b = { id: "y", requirement_ids: ["r1"], prompt: "how do you scale node services!" };
     expect(findDuplicatePairs([a, b])).toEqual([["x", "y"]]);
   });
 });
