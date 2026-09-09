@@ -1,0 +1,20 @@
+[
+  {
+    "id": "case-gitlab",
+    "jd": "Senior Backend Engineer\n\nWe are looking for a senior backend engineer to own services end to end. Requirements: deep Kubernetes experience running production workloads, strong GraphQL API design, and a track record of mentoring junior engineers. Bonus points for fintech domain knowledge and experience with postgres at scale.",
+    "company_url": "https://about.gitlab.com/",
+    "days": 5
+  },
+  {
+    "id": "case-thin",
+    "jd": "We need a React developer who cares about testing and works well with product managers.",
+    "company_url": "https://www.postman.com/",
+    "days": 2
+  },
+  {
+    "id": "case-offline",
+    "jd": "Backend engineer to run production services reliably and improve our developer experience. Must have operated kubernetes clusters and cared about observability.",
+    "company_url": "http://127.0.0.1:1/",
+    "days": 3
+  }
+]

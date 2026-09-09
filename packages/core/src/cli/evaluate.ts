@@ -50,8 +50,9 @@ export async function runBatch(cases: CaseRow[], deps: PipelineDeps, log: (line:
       kits.push({ id: c.id, status: "ok", kit, error: null });
       log(`[${c.id}] ok`);
     } catch (err) {
-      kits.push({ id: c.id, status: "failed", kit: null, error: errorCode(err) });
-      log(`[${c.id}] failed: ${errorCode(err).code} — ${errorCode(err).message}`);
+      const code = errorCode(err);
+      kits.push({ id: c.id, status: "failed", kit: null, error: code });
+      log(`[${c.id}] failed: ${code.code} — ${code.message}`);
     }
   }
   return { version: "1.0", generated_at: new Date().toISOString(), kits };

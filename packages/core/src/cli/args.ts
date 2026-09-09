@@ -22,7 +22,7 @@ export function parseArgs(argv: string[]): EvaluateArgs {
   };
   const input = read("--input");
   const output = read("--output");
-  if (args.some((a) => a.startsWith("-"))) {
+  if (args.length > 0) {
     throw new Error(`unexpected argument: ${args.join(" ")}`);
   }
   return { input, output };

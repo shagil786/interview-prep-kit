@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runBatch } from "./evaluate.js";
+import { main, runBatch } from "./evaluate.js";
 import { createFakeProvider } from "../llm/fake.js";
 import type { LlmGenerateOpts } from "../llm/provider.js";
 import { createFetcher } from "../retrieval/fetch.js";
@@ -47,6 +47,22 @@ function fakeResponder(_index: number, opts: LlmGenerateOpts): unknown {
     ],
   };
 }
+
+describe("main", () => {
+  it("exits 2 with a usage error for bad flags", async () => {
+    const logs: string[] = [];
+    const code = await main(["--wat"], {}, (l) => logs.push(l));
+    expect(code).toBe(2);
+    expect(logs.join()).toContain("usage");
+  });
+
+  it("exits 2 when GEMINI_API_KEY is missing", async () => {
+    const logs: string[] = [];
+    const code = await main(["--input", "a.json", "--output", "b.json"], {}, (l) => logs.push(l));
+    expect(code).toBe(2);
+    expect(logs.join()).toContain("GEMINI_API_KEY");
+  });
+});
 
 describe("runBatch", () => {
   it("writes ok kits for reachable cases and failed entries for unreachable ones", async () => {
