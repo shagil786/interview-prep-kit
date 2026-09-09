@@ -56,7 +56,8 @@ interface RawQuestion {
 
 function normalizeDifficulty(v: unknown): number {
   const n = Number(v);
-  return Number.isInteger(n) && n >= 1 && n <= 3 ? n : 2;
+  if (!Number.isInteger(n)) return 2;
+  return Math.min(3, Math.max(1, n));
 }
 
 /**
