@@ -1,0 +1,21 @@
+{
+  "name": "interview-prep-kit",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run test -w @prep/core",
+    "evaluate": "tsx packages/core/src/cli/evaluate.ts",
+    "dev:api": "npm run dev -w @prep/api",
+    "dev:web": "npm run dev -w @prep/web",
+    "typecheck": "tsc --noEmit -p packages/core/tsconfig.json && tsc --noEmit -p apps/api/tsconfig.json",
+    "test:all": "npm test -w @prep/core && npm test -w @prep/api",
+    "build": "npm run build -w @prep/web"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
