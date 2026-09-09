@@ -1,8 +1,32 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { api, currentUser } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 /* ---------- types ---------- */
 
@@ -59,14 +83,14 @@ interface KitPayload {
     flashcards?: Record<string, { origin: string; edited_by_user: boolean; pinned: boolean }>;
   };
 }
+type ItemMeta = { origin: string; edited_by_user: boolean; pinned: boolean };
 
 const CATEGORIES = ["technical", "behavioural", "system-design", "company-fit"] as const;
-const TABS = ["brief", "questions", "flashcards", "schedule", "practice", "weak", "mock"] as const;
-type Tab = (typeof TABS)[number];
+type Tab = "brief" | "questions" | "flashcards" | "schedule" | "practice" | "weak" | "mock";
 
-/* ---------- debounced field ---------- */
+/* ---------- debounced save ---------- */
 
-function useDebouncedSave<T>(onSave: (value: T) => void, delay = 700) {
+function useDebouncedSave<T>(onSave: (value: T) => void, delay = 800) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   return useCallback(
     (value: T) => {
@@ -89,7 +113,7 @@ export default function KitPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<Tab>("brief");
-  const [notice, setNotice] = useState<string | null>(null);
+  const [regenTarget, setRegenTarget] = useState<{ scope: string; category?: string } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -114,7 +138,6 @@ export default function KitPage() {
     void load();
   }, [authChecked, load]);
 
-  // Poll while generating.
   useEffect(() => {
     if (!payload || payload.status !== "generating") return;
     const t = setInterval(() => void load(), 2000);
@@ -122,13 +145,12 @@ export default function KitPage() {
   }, [payload, load]);
 
   const saveEdit = useCallback(
-    async (edit: unknown, message?: string) => {
+    async (edit: unknown) => {
       setBusy(true);
       setError(null);
       try {
         const res = await api.patch<{ kit: KitPayload }>(`/kits/${id}`, { edit });
         setPayload(res.kit);
-        if (message) setNotice(message);
       } catch (err) {
         setError((err as Error).message);
       } finally {
@@ -138,138 +160,181 @@ export default function KitPage() {
     [id],
   );
 
-  const regenerate = useCallback(
-    async (scope: string, category?: string) => {
-      if (!window.confirm("Regenerate this section? Your edits and pinned items in other sections are kept.")) return;
-      setBusy(true);
-      setError(null);
-      try {
-        const res = await api.post<{ kit: KitPayload }>(`/kits/${id}/regenerate`, { scope, category });
-        setPayload(res.kit);
-        setNotice("Section regenerated — your edits were preserved.");
-      } catch (err) {
-        setError((err as Error).message);
-      } finally {
-        setBusy(false);
-      }
-    },
-    [id],
-  );
+  const runRegenerate = useCallback(async () => {
+    if (!regenTarget) return;
+    setRegenTarget(null);
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await api.post<{ kit: KitPayload }>(`/kits/${id}/regenerate`, regenTarget);
+      setPayload(res.kit);
+      toast.success("Section regenerated — your edits were preserved.");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, [id, regenTarget]);
 
   const overlay = payload?.overlay;
-  const metaOf = (kind: "questions" | "flashcards", qid: string) =>
-    overlay?.[kind]?.[qid] ?? { origin: "generated", edited_by_user: false, pinned: false };
+  const metaOf = (kind: "questions" | "flashcards", itemId: string): ItemMeta =>
+    overlay?.[kind]?.[itemId] ?? { origin: "generated", edited_by_user: false, pinned: false };
 
-  if (!authChecked) return <p className="text-slate-500">Loading…</p>;
-  if (!payload) return <p className="text-slate-500">{error ?? "Loading kit…"}</p>;
-
-  if (payload.status === "failed") {
+  if (!authChecked || !payload) {
     return (
-      <div className="mx-auto max-w-xl rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-        <h1 className="text-lg font-semibold text-red-700">Generation failed</h1>
-        <p className="mt-2 text-sm text-red-600">{payload.error?.message ?? "Unknown error"}</p>
-        <button
-          onClick={async () => {
-            await api.post(`/kits/${id}/retry`, {}).catch((e) => setError((e as Error).message));
-            void load();
-          }}
-          className="mt-4 rounded-md bg-red-700 px-4 py-2 text-white"
-        >
-          Retry
-        </button>
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-64 w-full" />
       </div>
     );
   }
 
-  return (
-    <div>
-      {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-      {notice && (
-        <p className="mb-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{notice}</p>
-      )}
-      {busy && <p className="mb-4 text-sm text-slate-500">Saving…</p>}
+  if (payload.status === "failed") {
+    return (
+      <div className="mx-auto max-w-xl">
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-8 text-center">
+          <h1 className="text-lg font-semibold text-destructive">Generation failed</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{payload.error?.message ?? "Unknown error"}</p>
+          <Button
+            variant="destructive"
+            className="mt-4"
+            onClick={async () => {
+              await api.post(`/kits/${id}/retry`, {}).catch((e) => setError((e as Error).message));
+              void load();
+            }}
+          >
+            Retry
+          </Button>
+        </div>
+        {error && <p className="mt-3 text-center text-sm text-destructive">{error}</p>}
+      </div>
+    );
+  }
 
+  if (payload.status === "generating") {
+    return (
+      <div className="mx-auto max-w-xl">
+        <div className="mb-2 flex items-center justify-between">
+          <h1 className="text-xl font-semibold tracking-tight">Building your kit</h1>
+          <Badge variant="secondary">generating…</Badge>
+        </div>
+        <GeneratingPanel job={payload.job?.steps ?? []} />
+      </div>
+    );
+  }
+
+  const kit = payload.kit!;
+  const tabs: [Tab, string][] = [
+    ["brief", "Brief & role"],
+    ["questions", "Questions"],
+    ["flashcards", "Flashcards"],
+    ["schedule", "Schedule"],
+    ["practice", "Practice"],
+    ["weak", "Weak spots"],
+    ["mock", "Mock interview"],
+  ];
+
+  return (
+    <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">{payload.kit?.source.company ?? "Generating…"}</h1>
-        <span className="text-sm text-slate-500">{payload.status}</span>
+        <div className="min-w-0">
+          <h1 className="truncate text-xl font-semibold tracking-tight">{kit.source.company}</h1>
+          <p className="truncate text-sm text-muted-foreground">
+            {kit.role.title} · {kit.schedule.days_available}-day plan ·{" "}
+            <a href={kit.source.company_url} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">
+              {kit.source.company_url.replace(/^https?:\/\//, "")}
+            </a>
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {busy && <span className="text-xs text-muted-foreground">saving…</span>}
+          {kit.coverage.uncovered_requirement_ids.length > 0 ? (
+            <Badge variant="destructive">{kit.coverage.uncovered_requirement_ids.length} uncovered</Badge>
+          ) : (
+            <Badge className="bg-emerald-600 hover:bg-emerald-600">all musts covered</Badge>
+          )}
+        </div>
       </div>
 
-      {payload.status === "generating" ? (
-        <GeneratingPanel job={payload.job?.steps ?? []} />
-      ) : payload.kit ? (
-        <>
-          <nav aria-label="Sections" className="mt-4 flex flex-wrap gap-1">
-            {(
-              [
-                ["brief", "Brief"],
-                ["questions", "Questions"],
-                ["flashcards", "Flashcards"],
-                ["schedule", "Schedule"],
-                ["practice", "Practice"],
-                ["weak", "Weak spots"],
-                ["mock", "Mock interview"],
-              ] as [Tab, string][]
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setTab(key)}
-                aria-current={tab === key ? "page" : undefined}
-                className={
-                  tab === key
-                    ? "rounded-md bg-slate-900 px-3 py-1.5 text-sm text-white"
-                    : "rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
-                }
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
+      {error && (
+        <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </p>
+      )}
 
-          {tab === "brief" && <BriefTab kit={payload.kit} overlay={overlay} saveEdit={saveEdit} regenerate={regenerate} />}
-          {tab === "questions" && (
-            <QuestionsTab
-              kit={payload.kit}
-              metaOf={(qid) => metaOf("questions", qid)}
-              saveEdit={saveEdit}
-              regenerate={regenerate}
-            />
-          )}
-          {tab === "flashcards" && (
-            <FlashcardsTab
-              kit={payload.kit}
-              metaOf={(fid) => metaOf("flashcards", fid)}
-              saveEdit={saveEdit}
-              regenerate={regenerate}
-            />
-          )}
-          {tab === "schedule" && <ScheduleTab kit={payload.kit} saveEdit={saveEdit} regenerate={regenerate} />}
-          {tab === "practice" && <PracticeTab kit={payload.kit} id={id} />}
-          {tab === "weak" && <WeakTab id={id} />}
-          {tab === "mock" && <MockTab kit={payload.kit} id={id} />}
-        </>
-      ) : null}
+      <nav aria-label="Sections" className="-mx-1 overflow-x-auto px-1">
+        <div className="flex w-max gap-1 rounded-lg bg-muted p-1">
+          {tabs.map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              aria-current={tab === key ? "page" : undefined}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                tab === key
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {tab === "brief" && <BriefTab kit={kit} overlay={overlay} saveEdit={saveEdit} askRegen={setRegenTarget} />}
+      {tab === "questions" && (
+        <QuestionsTab kit={kit} metaOf={(qid) => metaOf("questions", qid)} saveEdit={saveEdit} askRegen={setRegenTarget} />
+      )}
+      {tab === "flashcards" && (
+        <FlashcardsTab kit={kit} metaOf={(fid) => metaOf("flashcards", fid)} saveEdit={saveEdit} askRegen={setRegenTarget} />
+      )}
+      {tab === "schedule" && <ScheduleTab kit={kit} saveEdit={saveEdit} askRegen={setRegenTarget} />}
+      {tab === "practice" && <PracticeTab kit={kit} id={id} />}
+      {tab === "weak" && <WeakTab id={id} />}
+      {tab === "mock" && <MockTab id={id} />}
+
+      <Dialog open={!!regenTarget} onOpenChange={(open) => !open && setRegenTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Regenerate this section?</DialogTitle>
+            <DialogDescription>
+              Generated items in {regenTarget?.scope === "questions-category" ? `the “${regenTarget?.category}” category` : "this section"}{" "}
+              will be replaced. Questions and cards you wrote, edited or pinned are kept, and the
+              schedule and coverage are recomputed automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRegenTarget(null)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void runRegenerate()}>Regenerate</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
+/* ---------- generating ---------- */
+
 function GeneratingPanel({ job }: { job: Step[] }) {
   return (
-    <div className="mt-6 rounded-lg border border-slate-200 bg-white p-5">
-      <h2 className="font-medium">Building your kit…</h2>
-      <ol className="mt-4 space-y-3">
+    <div className="rounded-xl border bg-card p-6">
+      <ol className="space-y-4">
         {job.map((s, i) => (
           <li key={`${s.stage}-${i}`} className="flex items-start gap-3 text-sm">
             <StatusDot status={s.status} />
-            <div>
-              <p className="font-medium text-slate-800">{s.label}</p>
-              {s.detail && <p className="text-slate-500">{s.detail}</p>}
+            <div className="min-w-0">
+              <p className="font-medium">{s.label}</p>
+              {s.detail && <p className="text-muted-foreground">{s.detail}</p>}
             </div>
           </li>
         ))}
-        <li className="flex items-center gap-3 text-sm text-slate-400">
-          <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
-          Finishing up…
+        <li className="flex items-center gap-3 text-sm text-muted-foreground">
+          <span className="mt-1 size-2.5 shrink-0 animate-pulse rounded-full bg-primary/60" aria-hidden />
+          Working on it — this usually takes a minute or two.
         </li>
       </ol>
     </div>
@@ -278,8 +343,28 @@ function GeneratingPanel({ job }: { job: Step[] }) {
 
 function StatusDot({ status }: { status: string }) {
   const color =
-    status === "done" ? "bg-emerald-500" : status === "failed" ? "bg-red-500" : status === "running" ? "bg-amber-500" : "bg-slate-300";
-  return <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${color}`} aria-hidden />;
+    status === "done"
+      ? "bg-emerald-500"
+      : status === "failed"
+        ? "bg-destructive"
+        : status === "running"
+          ? "bg-amber-500"
+          : status === "skipped"
+            ? "bg-muted-foreground/40"
+            : "bg-muted-foreground/30";
+  return <span className={cn("mt-1.5 size-2.5 shrink-0 rounded-full", color)} aria-hidden />;
+}
+
+/* ---------- provenance badges ---------- */
+
+function ProvenanceBadges({ meta }: { meta: ItemMeta }) {
+  return (
+    <>
+      {meta.origin === "user" && <Badge variant="default" className="bg-violet-600 hover:bg-violet-600">yours</Badge>}
+      {meta.edited_by_user && <Badge variant="outline" className="border-emerald-500/50 text-emerald-600 dark:text-emerald-400">edited · kept on regen</Badge>}
+      {meta.pinned && <Badge variant="outline" className="border-amber-500/60 text-amber-600 dark:text-amber-400">pinned</Badge>}
+    </>
+  );
 }
 
 /* ---------- brief ---------- */
@@ -287,83 +372,88 @@ function StatusDot({ status }: { status: string }) {
 function BriefTab(props: {
   kit: Kit;
   overlay?: KitPayload["overlay"];
-  saveEdit: (edit: unknown, message?: string) => Promise<void>;
-  regenerate: (scope: string) => Promise<void>;
+  saveEdit: (edit: unknown) => Promise<void>;
+  askRegen: (t: { scope: string; category?: string }) => void;
 }) {
-  const { kit, overlay, saveEdit, regenerate } = props;
+  const { kit, saveEdit, askRegen } = props;
   const brief = kit.company_brief;
   const saveBrief = useCallback(
     (patch: { summary?: string; what_they_do?: string }) => {
-      void saveEdit({ type: "updateBrief", brief: { summary: patch.summary ?? brief.summary, what_they_do: patch.what_they_do ?? brief.what_they_do } });
+      void saveEdit({
+        type: "updateBrief",
+        brief: { summary: patch.summary ?? brief.summary, what_they_do: patch.what_they_do ?? brief.what_they_do },
+      });
     },
     [saveEdit, brief.summary, brief.what_they_do],
   );
-  const debounceSummary = useDebouncedSave((v: string) => saveBrief({ summary: v }), 900);
-  const debounceWhat = useDebouncedSave((v: string) => saveBrief({ what_they_do: v }), 900);
+  const debounceSummary = useDebouncedSave((v: string) => saveBrief({ summary: v }));
+  const debounceWhat = useDebouncedSave((v: string) => saveBrief({ what_they_do: v }));
 
   return (
-    <section className="mt-5 space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="font-semibold">Company brief</h2>
-        <button type="button" onClick={() => void regenerate("brief")} className="rounded-md border px-3 py-1 text-sm">
-          Regenerate brief
-        </button>
-      </div>
-      <Field label="Summary" value={brief.summary} onChange={debounceSummary} />
-      <Field label="What they do" value={brief.what_they_do} onChange={debounceWhat} />
-      {(brief.unknowns?.length ?? 0) > 0 && (
-        <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">
-          <p className="font-medium">Honest unknowns</p>
-          <ul className="mt-1 list-inside list-disc">
-            {brief.unknowns!.map((u) => <li key={u}>{u}</li>)}
-          </ul>
+    <section className="grid gap-5 lg:grid-cols-2">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">Company brief</h2>
+          <Button variant="outline" size="sm" onClick={() => askRegen({ scope: "brief" })}>
+            Regenerate
+          </Button>
         </div>
-      )}
-      <div className="rounded-md border border-slate-200 p-4 text-sm">
-        <p className="font-medium">How this was researched</p>
-        {kit.source.pages_used.length === 0 ? (
-          <p className="mt-1 text-slate-500">No company pages could be retrieved — the brief reflects that.</p>
-        ) : (
-          <ul className="mt-2 list-inside list-disc text-slate-600">
-            {kit.source.pages_used.map((u) => (
-              <li key={u}><a href={u} target="_blank" rel="noreferrer" className="underline">{u}</a></li>
-            ))}
-          </ul>
+        <div className="space-y-2">
+          <Label htmlFor="brief-summary">Summary</Label>
+          <Textarea id="brief-summary" defaultValue={brief.summary} onChange={(e) => debounceSummary(e.target.value)} rows={4} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="brief-what">What they do</Label>
+          <Textarea id="brief-what" defaultValue={brief.what_they_do} onChange={(e) => debounceWhat(e.target.value)} rows={3} />
+        </div>
+        {(brief.unknowns?.length ?? 0) > 0 && (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+            <p className="font-medium text-amber-700 dark:text-amber-400">Honest unknowns</p>
+            <ul className="mt-1 list-inside list-disc text-muted-foreground">
+              {brief.unknowns!.map((u) => (
+                <li key={u}>{u}</li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
 
-      <div>
-        <h2 className="font-semibold">Role</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          {kit.role.title} · {kit.role.seniority}
-        </p>
-        <ul className="mt-2 space-y-1">
-          {kit.role.requirements.map((r) => (
-            <li key={r.id} className="flex items-center gap-2 text-sm">
-              <span className={`rounded px-1.5 py-0.5 text-xs ${r.priority === "must" ? "bg-slate-900 text-white" : "bg-slate-200 text-slate-700"}`}>
-                {r.priority}
-              </span>
-              <span className="text-slate-600">{r.text}</span>
-            </li>
-          ))}
-        </ul>
-        {overlay?.brief && <p className="mt-1 text-xs text-slate-400">brief provenance: {JSON.stringify(overlay.brief)}</p>}
+      <div className="space-y-5">
+        <div className="rounded-lg border bg-card p-4 text-sm">
+          <p className="font-medium">How this was researched</p>
+          {kit.source.pages_used.length === 0 ? (
+            <p className="mt-1 text-muted-foreground">No company pages could be retrieved — the brief reflects that.</p>
+          ) : (
+            <ul className="mt-2 space-y-1">
+              {kit.source.pages_used.map((u) => (
+                <li key={u} className="truncate">
+                  <a href={u} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">
+                    {u}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div>
+          <h2 className="font-semibold">Role &amp; requirements</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {kit.role.title} · {kit.role.seniority} · {kit.source.jd_chars} chars of description
+          </p>
+          <ul className="mt-3 space-y-2">
+            {kit.role.requirements.map((r) => (
+              <li key={r.id} className="flex items-start gap-2 text-sm">
+                <Badge variant={r.priority === "must" ? "default" : "secondary"} className="mt-0.5 shrink-0">
+                  {r.priority}
+                </Badge>
+                <span>{r.text}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </section>
-  );
-}
-
-function Field({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-sm font-medium">{label}</span>
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        rows={3}
-        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-      />
-    </label>
   );
 }
 
@@ -371,65 +461,71 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
 
 function QuestionsTab(props: {
   kit: Kit;
-  metaOf: (qid: string) => { origin: string; edited_by_user: boolean; pinned: boolean };
-  saveEdit: (edit: unknown, message?: string) => Promise<void>;
-  regenerate: (scope: string, category?: string) => Promise<void>;
+  metaOf: (qid: string) => ItemMeta;
+  saveEdit: (edit: unknown) => Promise<void>;
+  askRegen: (t: { scope: string; category?: string }) => void;
 }) {
-  const { kit, metaOf, saveEdit, regenerate } = props;
-  const [showOutline, setShowOutline] = useState<Record<string, boolean>>({});
+  const { kit, metaOf, saveEdit, askRegen } = props;
   const [newCat, setNewCat] = useState<string>("technical");
 
   const upsert = (q: Question, patch: Partial<Question>) => {
     void saveEdit({ type: "upsertQuestion", oldId: q.id, question: { ...q, ...patch } });
   };
+
   return (
-    <section className="mt-5">
-      <div className="flex items-center justify-between">
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-semibold">Questions ({kit.questions.length})</h2>
-        <div className="flex items-center gap-2 text-sm">
-          <select value={newCat} onChange={(e) => setNewCat(e.target.value)} aria-label="New question category" className="rounded border px-2 py-1">
-            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <button
-            type="button"
+        <div className="flex items-center gap-2">
+          <Select value={newCat} onValueChange={setNewCat}>
+            <SelectTrigger className="h-9 w-44" aria-label="New question category">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CATEGORIES.map((c) => (
+                <SelectItem key={c} value={c}>{c}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
             onClick={() =>
               void saveEdit({
                 type: "upsertQuestion",
-                question: { requirement_ids: [kit.role.requirements[0]?.id ?? ""].filter(Boolean), category: newCat, prompt: "New question — edit me.", answer_outline: "Outline for your answer.", difficulty: 2 },
+                question: {
+                  requirement_ids: [kit.role.requirements[0]?.id ?? ""].filter(Boolean),
+                  category: newCat,
+                  prompt: "New question — edit me.",
+                  answer_outline: "Outline for your answer.",
+                  difficulty: 2,
+                },
               })
             }
-            className="rounded-md bg-slate-900 px-3 py-1 text-white"
           >
             Add question
-          </button>
+          </Button>
         </div>
       </div>
-      <p className="mt-1 text-sm text-slate-500">Keyboard: Tab to a question then Alt+↑/↓ to reorder.</p>
 
-      <ul className="mt-4 space-y-3">
-        {kit.questions.map((q, index) => {
-          const meta = metaOf(q.id);
-          return (
-            <QuestionRow
-              key={q.id}
-              q={q}
-              kit={kit}
-              meta={meta}
-              canUp={index > 0}
-              canDown={index < kit.questions.length - 1}
-              showOutline={!!showOutline[q.id]}
-              onToggleOutline={() => setShowOutline((s2) => ({ ...s2, [q.id]: !s2[q.id] }))}
-              onSave={(patch) => upsert(q, patch)}
-              onMove={(dir) =>
-                void saveEdit({ type: "reorderQuestions", orderedIds: move(kit.questions.map((x) => x.id), index, dir) })
-              }
-              onDelete={() => void saveEdit({ type: "deleteQuestion", id: q.id })}
-              onPin={() => void saveEdit({ type: "pin", kind: "question", id: q.id, pinned: !meta.pinned })}
-              onMoveCategory={(category) => void saveEdit({ type: "moveQuestionCategory", id: q.id, category })}
-              onRegenCategory={() => void regenerate("questions-category", q.category)}
-            />
-          );
-        })}
+      <ul className="space-y-3">
+        {kit.questions.map((q, index) => (
+          <QuestionRow
+            key={q.id}
+            q={q}
+            kit={kit}
+            meta={metaOf(q.id)}
+            canUp={index > 0}
+            canDown={index < kit.questions.length - 1}
+            onSave={(patch) => upsert(q, patch)}
+            onMove={(dir) =>
+              void saveEdit({ type: "reorderQuestions", orderedIds: move(kit.questions.map((x) => x.id), index, dir) })
+            }
+            onDelete={() => void saveEdit({ type: "deleteQuestion", id: q.id })}
+            onPin={() => void saveEdit({ type: "pin", kind: "question", id: q.id, pinned: !metaOf(q.id).pinned })}
+            onMoveCategory={(category) => void saveEdit({ type: "moveQuestionCategory", id: q.id, category })}
+            onRegenCategory={() => askRegen({ scope: "questions-category", category: q.category })}
+          />
+        ))}
       </ul>
     </section>
   );
@@ -446,11 +542,9 @@ function move(ids: string[], index: number, dir: -1 | 1): string[] {
 function QuestionRow(props: {
   q: Question;
   kit: Kit;
-  meta: { origin: string; edited_by_user: boolean; pinned: boolean };
+  meta: ItemMeta;
   canUp: boolean;
   canDown: boolean;
-  showOutline: boolean;
-  onToggleOutline: () => void;
   onSave: (patch: Partial<Question>) => void;
   onMove: (dir: -1 | 1) => void;
   onDelete: () => void;
@@ -458,78 +552,69 @@ function QuestionRow(props: {
   onMoveCategory: (category: string) => void;
   onRegenCategory: () => void;
 }) {
-  const { q, kit, meta, canUp, canDown, showOutline, onToggleOutline, onSave, onMove, onDelete, onPin, onMoveCategory, onRegenCategory } = props;
-  const debouncePrompt = useDebouncedSave((v: string) => onSave({ prompt: v }), 900);
-  const debounceOutline = useDebouncedSave((v: string) => onSave({ answer_outline: v }), 900);
+  const { q, kit, meta, canUp, canDown, onSave, onMove, onDelete, onPin, onMoveCategory, onRegenCategory } = props;
+  const [showOutline, setShowOutline] = useState(false);
+  const debouncePrompt = useDebouncedSave((v: string) => onSave({ prompt: v }));
+  const debounceOutline = useDebouncedSave((v: string) => onSave({ answer_outline: v }));
   const covered = q.requirement_ids.map((rid) => kit.role.requirements.find((r) => r.id === rid)?.text ?? rid);
 
   return (
-    <li className="rounded-lg border border-slate-200 bg-white p-4">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-        <button
-          type="button"
-          aria-label="Move up"
-          disabled={!canUp}
-          onClick={() => onMove(-1)}
-          className="rounded border border-slate-300 px-1.5 py-0.5 disabled:opacity-40"
-        >
-          ↑
-        </button>
-        <button
-          type="button"
-          aria-label="Move down"
-          disabled={!canDown}
-          onClick={() => onMove(1)}
-          className="rounded border border-slate-300 px-1.5 py-0.5 disabled:opacity-40"
-        >
-          ↓
-        </button>
-        <select
-          aria-label="Category"
-          value={q.category}
-          onChange={(e) => onMoveCategory(e.target.value)}
-          className="rounded border border-slate-300 px-1 py-0.5"
-        >
-          {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <span>{q.difficulty}/3</span>
-        {meta.origin === "user" && <span className="text-indigo-600">yours</span>}
-        {meta.edited_by_user && <span className="text-emerald-600">edited · kept on regen</span>}
-        {meta.pinned && <span className="text-amber-600">pinned</span>}
-        <span className="ml-auto flex gap-2">
-          <button type="button" onClick={onPin} className="underline">
-            {meta.pinned ? "unpin" : "pin"}
-          </button>
-          <button type="button" onClick={onRegenCategory} className="underline">
-            regenerate category
-          </button>
-          <button type="button" onClick={onDelete} className="underline text-red-600">
-            delete
-          </button>
-        </span>
+    <li className="rounded-xl border bg-card p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex gap-1">
+          <Button variant="outline" size="icon" aria-label="Move up" disabled={!canUp} onClick={() => onMove(-1)}>
+            ↑
+          </Button>
+          <Button variant="outline" size="icon" aria-label="Move down" disabled={!canDown} onClick={() => onMove(1)}>
+            ↓
+          </Button>
+        </div>
+        <Select value={q.category} onValueChange={onMoveCategory}>
+          <SelectTrigger className="h-8 w-40" aria-label="Category">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {CATEGORIES.map((c) => (
+              <SelectItem key={c} value={c}>{c}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Badge variant="outline">difficulty {q.difficulty}/3</Badge>
+        <ProvenanceBadges meta={meta} />
+        <div className="ml-auto flex items-center gap-1">
+          <Button variant={meta.pinned ? "secondary" : "ghost"} size="sm" onClick={onPin}>
+            {meta.pinned ? "Unpin" : "Pin"}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onRegenCategory}>
+            Regenerate category
+          </Button>
+          <Button variant="ghost" size="sm" className="text-destructive" onClick={onDelete}>
+            Delete
+          </Button>
+        </div>
       </div>
-      <textarea
+      <Textarea
         aria-label="Question"
         defaultValue={q.prompt}
         onChange={(e) => debouncePrompt(e.target.value)}
         rows={2}
-        className="mt-2 w-full rounded-md border border-slate-200 px-2 py-1 text-sm"
+        className="mt-3 font-medium"
       />
-      <div className="mt-1 flex flex-wrap gap-1">
+      <div className="mt-2 flex flex-wrap gap-1.5">
         {covered.map((c) => (
-          <span key={c} className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{c}</span>
+          <Badge key={c} variant="secondary" className="max-w-full font-normal">{c}</Badge>
         ))}
       </div>
-      <button type="button" onClick={onToggleOutline} className="mt-1 text-xs underline">
+      <Button variant="link" size="sm" className="mt-1 h-auto px-0 text-muted-foreground" onClick={() => setShowOutline((s) => !s)}>
         {showOutline ? "Hide" : "Show"} answer outline
-      </button>
+      </Button>
       {showOutline && (
-        <textarea
+        <Textarea
           aria-label="Answer outline"
           defaultValue={q.answer_outline}
           onChange={(e) => debounceOutline(e.target.value)}
           rows={3}
-          className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-sm"
+          className="mt-1 bg-muted/40"
         />
       )}
     </li>
@@ -540,64 +625,111 @@ function QuestionRow(props: {
 
 function FlashcardsTab(props: {
   kit: Kit;
-  metaOf: (fid: string) => { origin: string; edited_by_user: boolean; pinned: boolean };
-  saveEdit: (edit: unknown, message?: string) => Promise<void>;
-  regenerate: (scope: string) => Promise<void>;
+  metaOf: (fid: string) => ItemMeta;
+  saveEdit: (edit: unknown) => Promise<void>;
+  askRegen: (t: { scope: string; category?: string }) => void;
 }) {
-  const { kit, metaOf, saveEdit, regenerate } = props;
+  const { kit, metaOf, saveEdit, askRegen } = props;
   return (
-    <section className="mt-5">
-      <div className="flex items-center justify-between">
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-semibold">Flashcards ({kit.flashcards.length})</h2>
-        <button type="button" onClick={() => void regenerate("flashcards")} className="rounded-md border px-3 py-1 text-sm">
-          Regenerate flashcards
-        </button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              void saveEdit({
+                type: "upsertFlashcard",
+                flashcard: {
+                  front: "New card front",
+                  back: "New card back",
+                  requirement_ids: [kit.role.requirements[0]?.id ?? ""].filter(Boolean),
+                },
+              })
+            }
+          >
+            Add card
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => askRegen({ scope: "flashcards" })}>
+            Regenerate
+          </Button>
+        </div>
       </div>
-      <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+      <ul className="grid gap-3 sm:grid-cols-2">
         {kit.flashcards.map((f) => (
           <FlashcardRow key={f.id} f={f} meta={metaOf(f.id)} saveEdit={saveEdit} />
         ))}
       </ul>
-      <button
-        type="button"
-        className="mt-3 rounded-md bg-slate-900 px-3 py-1 text-sm text-white"
-        onClick={() =>
-          void saveEdit({
-            type: "upsertFlashcard",
-            flashcard: { front: "New card front", back: "New card back", requirement_ids: [kit.role.requirements[0]?.id ?? ""].filter(Boolean) },
-          })
-        }
-      >
-        Add flashcard
-      </button>
     </section>
+  );
+}
+
+function FlashcardRow(props: {
+  f: Flashcard;
+  meta: ItemMeta;
+  saveEdit: (edit: unknown) => Promise<void>;
+}) {
+  const { f, meta, saveEdit } = props;
+  const debounceFront = useDebouncedSave((v: string) => void saveEdit({ type: "upsertFlashcard", oldId: f.id, flashcard: { ...f, front: v } }));
+  const debounceBack = useDebouncedSave((v: string) => void saveEdit({ type: "upsertFlashcard", oldId: f.id, flashcard: { ...f, back: v } }));
+  return (
+    <li className="rounded-xl border bg-card p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-1"><ProvenanceBadges meta={meta} /></div>
+        <div className="flex gap-1">
+          <Button variant={meta.pinned ? "secondary" : "ghost"} size="sm" onClick={() => void saveEdit({ type: "pin", kind: "flashcard", id: f.id, pinned: !meta.pinned })}>
+            {meta.pinned ? "Unpin" : "Pin"}
+          </Button>
+          <Button variant="ghost" size="sm" className="text-destructive" onClick={() => void saveEdit({ type: "deleteFlashcard", id: f.id })}>
+            Delete
+          </Button>
+        </div>
+      </div>
+      <Input aria-label="Front" defaultValue={f.front} onChange={(e) => debounceFront(e.target.value)} className="mt-2 font-medium" />
+      <Textarea aria-label="Back" defaultValue={f.back} onChange={(e) => debounceBack(e.target.value)} rows={2} className="mt-2 bg-muted/40" />
+    </li>
   );
 }
 
 /* ---------- schedule ---------- */
 
-function ScheduleTab(props: { kit: Kit; saveEdit: (edit: unknown, message?: string) => Promise<void>; regenerate: (scope: string) => Promise<void> }) {
-  const { kit, saveEdit, regenerate } = props;
-  const dayQuestions = (day: Day) =>
-    day.question_ids.map((qid) => kit.questions.find((q) => q.id === qid)?.prompt ?? qid);
+function ScheduleTab(props: {
+  kit: Kit;
+  saveEdit: (edit: unknown) => Promise<void>;
+  askRegen: (t: { scope: string; category?: string }) => void;
+}) {
+  const { kit, saveEdit, askRegen } = props;
+  const dayQuestions = (day: Day) => day.question_ids.map((qid) => kit.questions.find((q) => q.id === qid)?.prompt ?? qid);
+  const totalMinutes = kit.schedule.days.reduce((a, d) => a + d.minutes, 0);
   return (
-    <section className="mt-5">
-      <div className="flex items-center justify-between">
-        <h2 className="font-semibold">Schedule — {kit.schedule.days_available} day(s)</h2>
-        <button type="button" onClick={() => void regenerate("schedule")} className="rounded-md border px-3 py-1 text-sm">
-          Regenerate schedule
-        </button>
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-semibold">
+          Schedule — {kit.schedule.days_available} days{" "}
+          <span className="text-sm font-normal text-muted-foreground">· {totalMinutes} min total</span>
+        </h2>
+        <Button variant="outline" size="sm" onClick={() => askRegen({ scope: "schedule" })}>
+          Regenerate
+        </Button>
       </div>
-      <ol className="mt-4 space-y-2">
+      <ol className="space-y-3">
         {kit.schedule.days.map((d) => (
-          <li key={d.day} className="rounded-lg border border-slate-200 bg-white p-3 text-sm">
+          <li key={d.day} className="rounded-xl border bg-card p-4 text-sm">
             <div className="flex flex-wrap items-center gap-3">
-              <span className="font-medium">Day {d.day}</span>
+              <Badge variant="secondary" className="text-base font-semibold">Day {d.day}</Badge>
               <FocusEditor day={d} saveEdit={saveEdit} />
-              <span className="ml-auto text-slate-500">{d.question_ids.length} question(s) · {d.minutes} min</span>
+              <span className="ml-auto text-muted-foreground">
+                {d.question_ids.length} question(s) · {d.minutes} min
+              </span>
             </div>
-            <ul className="mt-2 list-inside list-disc text-slate-600">
-              {dayQuestions(d).map((p) => <li key={p}>{p}</li>)}
+            <Separator className="my-3" />
+            <ul className="list-inside list-disc space-y-1 text-muted-foreground">
+              {dayQuestions(d).length === 0 ? (
+                <li>Review day — revisit your weakest flashcards.</li>
+              ) : (
+                dayQuestions(d).map((p) => <li key={p}>{p}</li>)
+              )}
             </ul>
           </li>
         ))}
@@ -608,13 +740,13 @@ function ScheduleTab(props: { kit: Kit; saveEdit: (edit: unknown, message?: stri
 
 function FocusEditor(props: { day: Day; saveEdit: (edit: unknown) => Promise<void> }) {
   const { day, saveEdit } = props;
-  const debounce = useDebouncedSave((focus: string) => void saveEdit({ type: "updateDay", day: day.day, patch: { focus } }), 900);
+  const debounce = useDebouncedSave((focus: string) => void saveEdit({ type: "updateDay", day: day.day, patch: { focus } }));
   return (
-    <input
+    <Input
       aria-label={`Day ${day.day} focus`}
       defaultValue={day.focus}
       onChange={(e) => debounce(e.target.value)}
-      className="w-56 rounded border border-slate-200 px-2 py-1 text-sm"
+      className="w-full max-w-xs font-medium"
     />
   );
 }
@@ -637,9 +769,7 @@ function PracticeTab({ kit, id }: { kit: Kit; id: string }) {
   }, [id]);
 
   function start() {
-    // unseen first, then least confident — confidence-weighted ordering
-    const entries = [...kit.flashcards];
-    setQueue(entries);
+    setQueue([...kit.flashcards]);
     setIndex(0);
     setRevealed(false);
     setStarted(true);
@@ -651,62 +781,68 @@ function PracticeTab({ kit, id }: { kit: Kit; id: string }) {
     if (!current) return;
     try {
       await api.post(`/kits/${id}/practice`, { card_id: current.id, confidence });
+      const r = await api.get<{ practice: { covered: number; total: number } }>(`/kits/${id}/practice`);
+      setSummary(r.practice);
       if (index + 1 < queue.length) {
         setIndex(index + 1);
         setRevealed(false);
       } else {
         setStarted(false);
+        toast.success("Session complete — nice work.");
       }
-      const r = await api.get<{ practice: { covered: number; total: number } }>(`/kits/${id}/practice`);
-      setSummary(r.practice);
     } catch (err) {
       setError((err as Error).message);
     }
   }
 
   if (!started) {
+    const progress = summary ? Math.round((summary.covered / Math.max(summary.total, 1)) * 100) : 0;
     return (
-      <section className="mt-5 rounded-lg border border-slate-200 bg-white p-6 text-center">
+      <section className="rounded-xl border bg-card p-8 text-center">
         <h2 className="font-semibold">Flashcard practice</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          {summary ? `${summary.covered}/${summary.total} covered` : "…"}
+        <p className="mt-1 text-sm text-muted-foreground">
+          {summary ? `${summary.covered}/${summary.total} cards covered (${progress}%)` : "…"}
         </p>
-        <button type="button" onClick={start} className="mt-4 rounded-md bg-slate-900 px-4 py-2 text-white">
+        <div className="mx-auto mt-3 h-2 w-full max-w-sm overflow-hidden rounded-full bg-muted">
+          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} />
+        </div>
+        <Button size="lg" className="mt-5" onClick={start}>
           Start a session
-        </button>
-        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+        </Button>
+        {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
       </section>
     );
   }
   if (!current) return null;
   return (
-    <section className="mt-5 rounded-lg border border-slate-200 bg-white p-6">
-      <p className="text-xs text-slate-400">
+    <section className="mx-auto max-w-xl rounded-xl border bg-card p-8">
+      <p className="text-xs text-muted-foreground">
         Card {index + 1} of {queue.length}
       </p>
-      <h2 className="mt-2 text-lg font-medium">{current.front}</h2>
+      <h2 className="mt-3 text-xl font-medium">{current.front}</h2>
       {revealed ? (
         <>
-          <p className="mt-3 text-slate-700">{current.back}</p>
-          <div className="mt-5 flex gap-2">
-            {([1, 2, 3] as const).map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => void rate(c)}
-                className="rounded-md border border-slate-300 px-4 py-2 text-sm"
-              >
-                {c === 1 ? "Not confident" : c === 2 ? "Almost" : "Confident"}
-              </button>
-            ))}
+          <Separator className="my-4" />
+          <p className="text-muted-foreground">{current.back}</p>
+          <p className="mt-5 text-sm font-medium">How confident were you?</p>
+          <div className="mt-2 flex gap-2">
+            <Button variant="outline" className="flex-1 border-destructive/40" onClick={() => void rate(1)}>
+              Not confident
+            </Button>
+            <Button variant="outline" className="flex-1" onClick={() => void rate(2)}>
+              Almost
+            </Button>
+            <Button className="flex-1" onClick={() => void rate(3)}>
+              Confident
+            </Button>
           </div>
         </>
       ) : (
-        <button type="button" onClick={() => setRevealed(true)} className="mt-4 rounded-md bg-slate-900 px-4 py-2 text-white">
+        <Button className="mt-6 w-full" onClick={() => setRevealed(true)}>
           Reveal answer
-        </button>
+        </Button>
       )}
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
     </section>
   );
 }
@@ -722,27 +858,33 @@ function WeakTab({ id }: { id: string }) {
       .then((r) => setSpots(r.spots))
       .catch((e) => setError((e as Error).message));
   }, [id]);
-  if (error) return <p className="mt-5 text-sm text-red-600">{error}</p>;
-  if (!spots) return <p className="mt-5 text-sm text-slate-500">Loading weak spots…</p>;
+  if (error) return <p className="text-sm text-destructive">{error}</p>;
+  if (!spots)
+    return (
+      <div className="space-y-2">
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
+      </div>
+    );
   if (spots.length === 0) {
     return (
-      <section className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-6 text-center">
-        <h2 className="font-semibold text-emerald-800">No weak spots right now</h2>
-        <p className="mt-1 text-sm text-emerald-700">Every requirement is covered and practised with good confidence.</p>
+      <section className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-8 text-center">
+        <h2 className="font-semibold">No weak spots right now</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Every requirement is covered and practised with good confidence.</p>
       </section>
     );
   }
   return (
-    <section className="mt-5">
+    <section className="space-y-3">
       <h2 className="font-semibold">Close these gaps before the interview</h2>
-      <ol className="mt-3 space-y-2">
+      <ol className="space-y-2">
         {spots.map((s) => (
-          <li key={s.requirementId} className="rounded-lg border border-amber-200 bg-white p-3 text-sm">
-            <div className="flex justify-between">
+          <li key={s.requirementId} className="rounded-xl border border-amber-500/40 bg-card p-4 text-sm">
+            <div className="flex items-center justify-between">
               <span className="font-medium">{s.requirementId}</span>
-              <span className="text-slate-400">score {s.score}</span>
+              <Badge variant="secondary">priority {s.score}</Badge>
             </div>
-            <p className="mt-1 text-slate-600">{s.reason}</p>
+            <p className="mt-1 text-muted-foreground">{s.reason}</p>
           </li>
         ))}
       </ol>
@@ -752,21 +894,21 @@ function WeakTab({ id }: { id: string }) {
 
 /* ---------- mock interview ---------- */
 
-function MockTab({ kit, id }: { kit: Kit; id: string }) {
+function MockTab({ id }: { id: string }) {
   const [session, setSession] = useState<{ sessionId: string; questions: { questionId: string; prompt: string }[] } | null>(null);
   const [idx, setIdx] = useState(0);
   const [answer, setAnswer] = useState("");
   const [result, setResult] = useState<{ grade: number; feedback: string; modelAnswer: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [category, setCategory] = useState<string>("");
+  const [category, setCategory] = useState<string>("all");
 
   async function begin() {
     setError(null);
     setResult(null);
     try {
       const s = await api.post<{ sessionId: string; questions: { questionId: string; prompt: string }[] }>(`/kits/${id}/mock/session`, {
-        category: category || undefined,
+        category: category === "all" ? undefined : category,
       });
       setSession(s);
       setIdx(0);
@@ -797,41 +939,62 @@ function MockTab({ kit, id }: { kit: Kit; id: string }) {
   const q = session?.questions[idx];
 
   return (
-    <section className="mt-5 space-y-4">
+    <section className="mx-auto max-w-xl space-y-4">
       <h2 className="font-semibold">Mock interview</h2>
       {!session ? (
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
-          <p className="text-sm text-slate-600">Answer the kit’s own questions in writing; PrepKit scores you against the answer outline.</p>
-          <div className="mt-3 flex items-center gap-2">
-            <select value={category} onChange={(e) => setCategory(e.target.value)} className="rounded border px-2 py-1 text-sm" aria-label="Category filter">
-              <option value="">All categories</option>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <button type="button" onClick={() => void begin()} className="rounded-md bg-slate-900 px-4 py-2 text-sm text-white">
-              Start session
-            </button>
+        <div className="rounded-xl border bg-card p-6">
+          <p className="text-sm text-muted-foreground">
+            Answer the kit’s own questions in writing; PrepKit scores each answer against the expected outline.
+          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger className="w-48" aria-label="Category filter">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {CATEGORIES.map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button onClick={() => void begin()}>Start session</Button>
           </div>
-          {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+          {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
         </div>
       ) : q ? (
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
-          <p className="text-xs text-slate-400">Question {idx + 1} of {session.questions.length}</p>
+        <div className="rounded-xl border bg-card p-6">
+          <p className="text-xs text-muted-foreground">
+            Question {idx + 1} of {session.questions.length}
+          </p>
           <h3 className="mt-1 font-medium">{q.prompt}</h3>
-          <textarea value={answer} onChange={(e) => setAnswer(e.target.value)} rows={6} placeholder="Write your answer as if speaking it…" className="mt-3 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
-          <button type="button" disabled={busy || !answer.trim()} onClick={() => void submit()} className="mt-2 rounded-md bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50">
+          <Textarea
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+            rows={6}
+            placeholder="Write your answer as if speaking it…"
+            className="mt-3"
+          />
+          <Button disabled={busy || !answer.trim()} onClick={() => void submit()} className="mt-3">
             {busy ? "Scoring…" : "Submit answer"}
-          </button>
+          </Button>
           {result && (
-            <div className="mt-4 rounded-md bg-slate-50 p-3 text-sm">
-              <p className="font-medium">Grade: {"●".repeat(result.grade)}{"○".repeat(5 - result.grade)}</p>
-              <p className="mt-1 text-slate-700">{result.feedback}</p>
+            <div className="mt-4 rounded-lg bg-muted/50 p-4 text-sm">
+              <p className="font-medium">
+                Grade:{" "}
+                <span className="text-primary">{"●".repeat(result.grade)}</span>
+                <span className="text-muted-foreground/40">{"○".repeat(5 - result.grade)}</span>{" "}
+                {result.grade}/5
+              </p>
+              <p className="mt-1 text-muted-foreground">{result.feedback}</p>
               <details className="mt-2">
-                <summary className="cursor-pointer underline">Model answer</summary>
-                <p className="mt-1 text-slate-600">{result.modelAnswer}</p>
+                <summary className="cursor-pointer text-primary">Model answer</summary>
+                <p className="mt-1 text-muted-foreground">{result.modelAnswer}</p>
               </details>
-              <button
-                type="button"
-                className="mt-3 rounded-md border px-3 py-1 text-sm"
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
                 onClick={() => {
                   if (idx + 1 < session.questions.length) {
                     setIdx(idx + 1);
@@ -844,47 +1007,12 @@ function MockTab({ kit, id }: { kit: Kit; id: string }) {
                 }}
               >
                 {idx + 1 < session.questions.length ? "Next question" : "Finish session"}
-              </button>
+              </Button>
             </div>
           )}
-          {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+          {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
         </div>
       ) : null}
     </section>
-  );
-}
-
-function FlashcardRow(props: {
-  f: Flashcard;
-  meta: { origin: string; edited_by_user: boolean; pinned: boolean };
-  saveEdit: (edit: unknown, message?: string) => Promise<void>;
-}) {
-  const { f, meta, saveEdit } = props;
-  const debounceFront = useDebouncedSave((v: string) => void saveEdit({ type: "upsertFlashcard", oldId: f.id, flashcard: { ...f, front: v } }), 900);
-  const debounceBack = useDebouncedSave((v: string) => void saveEdit({ type: "upsertFlashcard", oldId: f.id, flashcard: { ...f, back: v } }), 900);
-  return (
-    <li className="rounded-lg border border-slate-200 bg-white p-3">
-      <div className="flex justify-between text-xs text-slate-500">
-        <span>
-          {meta.origin === "user" && "yours "}
-          {meta.edited_by_user && "· edited"}
-          {meta.pinned && "· pinned"}
-        </span>
-        <span className="flex gap-2">
-          <button
-            type="button"
-            className="underline"
-            onClick={() => void saveEdit({ type: "pin", kind: "flashcard", id: f.id, pinned: !meta.pinned })}
-          >
-            {meta.pinned ? "unpin" : "pin"}
-          </button>
-          <button type="button" className="underline text-red-600" onClick={() => void saveEdit({ type: "deleteFlashcard", id: f.id })}>
-            delete
-          </button>
-        </span>
-      </div>
-      <input aria-label="Front" defaultValue={f.front} onChange={(e) => debounceFront(e.target.value)} className="mt-1 w-full rounded border border-slate-200 px-2 py-1 text-sm font-medium" />
-      <textarea aria-label="Back" defaultValue={f.back} onChange={(e) => debounceBack(e.target.value)} rows={2} className="mt-1 w-full rounded border border-slate-200 px-2 py-1 text-sm text-slate-600" />
-    </li>
   );
 }

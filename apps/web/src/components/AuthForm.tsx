@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const [email, setEmail] = useState("");
@@ -19,6 +24,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
     setBusy(true);
     try {
       await api.post(`/auth/${register ? "register" : "login"}`, { email, password });
+      toast.success(register ? "Account created — welcome!" : "Welcome back.");
       router.push("/dashboard");
       router.refresh();
     } catch (err) {
@@ -29,58 +35,68 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   }
 
   return (
-    <div className="mx-auto mt-12 max-w-sm">
-      <h1 className="text-2xl font-semibold">{register ? "Create your account" : "Log in"}</h1>
-      <form onSubmit={submit} className="mt-6 space-y-4">
-        <div>
-          <label htmlFor="email" className="mb-1 block text-sm font-medium">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2"
-          />
-        </div>
-        <div>
-          <label htmlFor="password" className="mb-1 block text-sm font-medium">
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            required
-            minLength={8}
-            autoComplete={register ? "new-password" : "current-password"}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2"
-          />
-        </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button
-          type="submit"
-          disabled={busy}
-          className="w-full rounded-md bg-slate-900 px-4 py-2 text-white disabled:opacity-60"
-        >
-          {busy ? "…" : register ? "Sign up" : "Log in"}
-        </button>
-        <p className="text-sm text-slate-500">
-          {register ? (
-            <>
-              Already have an account? <Link href="/login" className="underline">Log in</Link>
-            </>
-          ) : (
-            <>
-              New here? <Link href="/register" className="underline">Create an account</Link>
-            </>
-          )}
-        </p>
-      </form>
+    <div className="mx-auto mt-8 w-full max-w-sm">
+      <Card>
+        <CardHeader>
+          <CardTitle>{register ? "Create your account" : "Log in"}</CardTitle>
+          <CardDescription>
+            {register ? "Sign up to build your first prep kit." : "Log in to see your kits."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={submit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                required
+                minLength={8}
+                autoComplete={register ? "new-password" : "current-password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">At least 8 characters.</p>
+            </div>
+            {error && (
+              <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {error}
+              </p>
+            )}
+            <Button type="submit" disabled={busy} className="w-full">
+              {busy ? "…" : register ? "Sign up" : "Log in"}
+            </Button>
+            <p className="text-center text-sm text-muted-foreground">
+              {register ? (
+                <>
+                  Already have an account?{" "}
+                  <Link href="/login" className="font-medium text-primary underline-offset-4 hover:underline">
+                    Log in
+                  </Link>
+                </>
+              ) : (
+                <>
+                  New here?{" "}
+                  <Link href="/register" className="font-medium text-primary underline-offset-4 hover:underline">
+                    Create an account
+                  </Link>
+                </>
+              )}
+            </p>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
