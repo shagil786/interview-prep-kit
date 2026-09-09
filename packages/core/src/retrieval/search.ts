@@ -14,6 +14,15 @@ interface BraveWebResult {
   description?: string;
 }
 
+function isHttpUrl(u: string): boolean {
+  try {
+    const p = new URL(u);
+    return p.protocol === "http:" || p.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 /** Map a Brave Search API web response to our SearchResult shape (pure). */
 export function mapBraveResponse(json: unknown): SearchResult[] {
   if (!json || typeof json !== "object") return [];
@@ -23,7 +32,7 @@ export function mapBraveResponse(json: unknown): SearchResult[] {
     .filter((r): r is BraveWebResult & { url: string } => {
       if (!r || typeof r !== "object") return false;
       const u = (r as BraveWebResult).url;
-      return typeof u === "string" && u.startsWith("http");
+      return typeof u === "string" && isHttpUrl(u);
     })
     .map((r) => ({
       title: String(r.title ?? ""),

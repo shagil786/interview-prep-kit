@@ -11,6 +11,7 @@ export interface CleanedPage {
 export type PageRole = "homepage" | "about" | "careers" | "hiring-process" | "blog" | "other";
 
 const BOILERPLATE = "script, style, nav, footer, form, aside, noscript, svg, template";
+const TEXT_BLOCKS = "p, li, h1, h2, h3, h4, h5, h6, blockquote";
 
 /** Parse HTML into title, main text, and links after stripping boilerplate. */
 export function cleanHtml(html: string, url: string): CleanedPage {
@@ -26,10 +27,29 @@ export function cleanHtml(html: string, url: string): CleanedPage {
   $(BOILERPLATE).remove();
   const title = $("title").first().text().trim();
 
-  const container = $("main").first();
-  const scope = container.length > 0 ? container : $("article").first();
-  const body = scope.length > 0 ? scope : $("body");
-  return { title, text: extractMainText(body.text()), links };
+  const main = $("main").first();
+  const article = $("article").first();
+  const scope = main.length > 0 ? main : article.length > 0 ? article : $("body");
+  return { title, text: extractBlocks($, scope), links };
+}
+
+/**
+ * Extract reading text as newline-separated lines from content blocks
+ * (p/li/headings/blockquote), collapsing each block to single spaces. Keeps
+ * block boundaries so adjacent blocks never merge on minified HTML, drops
+ * empty lines and boilerplate that repeats verbatim 3+ times (cookie bars,
+ * banners, "share this"), then caps length.
+ */
+function extractBlocks($: cheerio.CheerioAPI, scope: ReturnType<cheerio.CheerioAPI>) {
+  const lines: string[] = [];
+  scope.find(TEXT_BLOCKS).each((_, el) => {
+    const line = $(el).text().replace(/\s+/g, " ").trim();
+    if (line.length > 0) lines.push(line);
+  });
+  const counts = new Map<string, number>();
+  for (const line of lines) counts.set(line, (counts.get(line) ?? 0) + 1);
+  const kept = lines.filter((line) => (counts.get(line) ?? 0) < 3);
+  return kept.join("\n").slice(0, TEXT_CAP);
 }
 
 const MATCHERS: Array<[PageRole, RegExp]> = [

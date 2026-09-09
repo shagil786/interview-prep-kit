@@ -28,9 +28,11 @@ beforeAll(async () => {
       res.writeHead(200, { "content-type": "text/plain" });
       res.end("User-agent: *\nDisallow: /private\n");
     } else if (u === "/") {
-      send("Acme - Home", `<a href="/about">About</a><a href="/blog">Engineering blog</a><a href="/inside">Inside Acme</a>`);
+      send("Acme - Home", `<a href="/about">About</a><a href="/blog">Engineering blog</a><a href="/inside">Inside Acme</a><a href="/company/">Company</a>`);
     } else if (u === "/inside") {
-      send("Inside Acme", `<a href="/company/handbook">The Handbook</a><a href="/careers">Careers</a>`);
+      send("Inside Acme", `<a href="/careers">Careers</a><a href="/about">About</a>`);
+    } else if (u === "/company/") {
+      send("Company", `<a href="handbook">The Handbook</a>`);
     } else if (u === "/company/handbook") {
       send("Handbook", `<p>Interview process: take-home then system design.</p>`);
     } else if (u === "/careers") {
@@ -76,6 +78,17 @@ describe("crawlSite", () => {
     expect(urls).toContain(`${origin}/careers`);
     const handbook = pages.find((p) => p.url.endsWith("/company/handbook"));
     expect(handbook?.html).toContain("take-home");
+  });
+
+  it("finds a hiring page reachable only through a bare relative link on a subdirectory page", async () => {
+    fetched.length = 0;
+    const pages = await crawlSite(`${origin}/`, deps());
+    const urls = pages.map((p) => p.url);
+    // `/company/` links `handbook` (relative); only per-page resolution reaches `/company/handbook`.
+    expect(urls).toContain(`${origin}/company/`);
+    expect(urls).toContain(`${origin}/company/handbook`);
+    expect(fetched.some((u) => u.endsWith("/handbook"))).toBe(true);
+    expect(fetched.some((u) => u === `${origin}/handbook`)).toBe(false);
   });
 
   it("never fetches a robots-disallowed path even when linked", async () => {

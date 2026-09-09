@@ -82,14 +82,15 @@ export function createFetcher(opts: FetchOptions = {}) {
       }
       const body = res.body;
       let html = "";
+      let bytes = 0;
       if (body) {
         const reader = body.getReader();
         const decoder = new TextDecoder();
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;
-          html += decoder.decode(value, { stream: true });
-          if (html.length > cfg.maxBytes) {
+          bytes += value.byteLength;
+          if (bytes > cfg.maxBytes) {
             await reader.cancel().catch(() => undefined);
             return bad("content too large (stream exceeded cap)", {
               status: res.status,
@@ -97,6 +98,7 @@ export function createFetcher(opts: FetchOptions = {}) {
               contentType,
             });
           }
+          html += decoder.decode(value, { stream: true });
         }
         html += decoder.decode();
       }

@@ -33,6 +33,21 @@ describe("cleanHtml", () => {
     expect(out.links).toContainEqual({ href: "/careers", text: "Careers" });
     expect(out.links).toContainEqual({ href: "/", text: "Home" });
   });
+
+  it("keeps block boundaries on minified html", () => {
+    const minified = cleanHtml("<main><p>A sentence.</p><p>Another one.</p></main>", "https://acme.example/x");
+    expect(minified.text).toContain("A sentence.\nAnother one.");
+    expect(minified.text).not.toContain("sentence.Another");
+  });
+
+  it("drops boilerplate lines repeated three or more times", () => {
+    const html =
+      "<main><p>Unique content here.</p><p>Sign up for our newsletter</p>" +
+      "<p>Sign up for our newsletter</p><p>Sign up for our newsletter</p></main>";
+    const out = cleanHtml(html, "https://acme.example/x");
+    expect(out.text).toContain("Unique content here.");
+    expect(out.text).not.toContain("Sign up");
+  });
 });
 
 describe("classifyPage", () => {

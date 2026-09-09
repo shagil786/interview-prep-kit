@@ -78,13 +78,14 @@ export async function crawlSite(root: string, deps: CrawlerDeps, opts: CrawlOpti
 
     const queued = new Set(frontier.map((f) => normalized(f.url)));
     const children: FrontierItem[] = [];
+    const pageBase = new URL(key);
     $("a[href]").each((_, el) => {
       const href = $(el).attr("href");
       if (!href) return;
-      if (!isInternal(rootUrl, href)) return;
+      if (!isInternal(pageBase, href)) return;
       let abs: URL;
       try {
-        abs = new URL(href, rootUrl);
+        abs = new URL(href, pageBase);
       } catch {
         return;
       }
