@@ -92,4 +92,15 @@ describe("researchCompany", () => {
     // The run still produced a kit-level finding.
     expect(finding.hiring_process).not.toBeNull();
   });
+
+  it("filters generic non-company discussion results and records none-found honestly", async () => {
+    // 127.0.0.1 host -> company token "127"; a career-centre URL lacks it.
+    const search = createFakeSearch(() => [
+      { title: "General interview tips", url: "https://careercentre.example/tips", snippet: "how to interview well" },
+      { title: "Another generic", url: "https://blog.example/50-questions", snippet: "top questions" },
+    ]);
+    const finding = await researchCompany({ company_url: origin }, makeDeps({ search }));
+    expect(finding.discussion).toEqual([]);
+    expect(finding.unknowns.join()).toContain("no company-specific results");
+  });
 });

@@ -91,9 +91,11 @@ Each step is a separate unit with its own job step (the UI shows the live stage 
    hiring pages at unpredictable paths.
 3. **Classify + pick** (code) — about/homepage excerpts for "what they do"; a hiring-process page
    when one exists (changes what questions make sense); recorded honestly when none is found.
-4. **Public-discussion search** (Brave) — `"{company} interview process"` queries, top results
-   fetched + cleaned, unreachable sources recorded not fatal. Skipped + recorded for local/private
-   fixture hosts.
+4. **Public-discussion search** (`SEARCH_PROVIDER=brave` default, `=you` also available) —
+   `"{company} interview process"` queries; results are filtered to those that actually mention
+   the company (career-centre/generic interview-guide pages are dropped), then top results fetched
+   + cleaned, unreachable sources recorded not fatal. Skipped + recorded for local/private fixture
+   hosts.
 5. **Company brief** (LLM, grounded) — the model only ever sees pages we actually fetched; declared
    sources are intersected with real URLs; `company_brief.unknowns` lists what could not be
    established. Nothing retrievable → an honest stub, no fabrication.

@@ -24,11 +24,23 @@ export interface ResearchDeps {
 
 const EXCERPT_CAP = 6000;
 const MAX_DISCUSSION_FETCHES = 3;
+// Unreachable sources don't count as fetches; cap attempts so a whole page of
+// bot-blocked results can't stall the stage.
+const MAX_DISCUSSION_ATTEMPTS = 6;
 
+const HOST_NOISE = new Set(["www", "about", "company", "careers", "jobs", "www2", "web", "home", "en", "de", "fr"]);
+
+/** Company token from a host: the segment before the TLD, skipping prefixes.
+ * about.gitlab.com -> "gitlab"; www.postman.com -> "postman". */
 function hostLabel(url: string): string {
   try {
     const host = new URL(url).hostname.toLowerCase();
-    return host.replace(/^www\./, "").split(".")[0];
+    const parts = host.split(".").filter(Boolean);
+    for (let i = parts.length - 2; i >= 0; i -= 1) {
+      const p = parts[i];
+      if (p.length > 2 && !HOST_NOISE.has(p)) return p;
+    }
+    return parts[0] ?? "";
   } catch {
     return "";
   }
@@ -45,6 +57,19 @@ function isPrivateHostname(hostname: string): boolean {
   if (/^127\.|^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
   if (h.endsWith(".local") || h.endsWith(".internal")) return true;
   return h === "::1" || h === "[::1]";
+}
+
+/**
+ * Is this search result plausibly about the company? Search engines happily
+ * return generic interview-prep pages (career centres, "top 50 questions"
+ * blogs); we only want discussion of THIS company. Cheap deterministic gate
+ * on title+url+snippet before spending a fetch — pages that pass are still
+ * fetched with full caps and recorded normally.
+ */
+function isCompanyRelevant(company: string, r: SearchResult): boolean {
+  if (!company) return true;
+  const hay = `${r.title} ${r.url} ${r.snippet}`.toLowerCase();
+  return hay.includes(company.toLowerCase());
 }
 
 /**
@@ -108,6 +133,8 @@ export async function researchCompany(input: { company_url: string }, deps: Rese
     // Dedupe + cap across BOTH queries: a URL surfaced twice is fetched once.
     const known = new Set(crawled.map((p) => p.url));
     let fetches = 0;
+    let attempts = 0;
+    let filteredOut = 0;
     for (const q of queries) {
       let results: SearchResult[] = [];
       try {
@@ -117,9 +144,14 @@ export async function researchCompany(input: { company_url: string }, deps: Rese
         continue;
       }
       for (const r of results) {
-        if (fetches >= MAX_DISCUSSION_FETCHES) break;
+        if (fetches >= MAX_DISCUSSION_FETCHES || attempts >= MAX_DISCUSSION_ATTEMPTS) break;
         if (known.has(r.url)) continue;
+        if (!isCompanyRelevant(company, r)) {
+          filteredOut += 1;
+          continue;
+        }
         known.add(r.url);
+        attempts += 1;
         const page = await deps.fetchHtml(r.url);
         if (page.error || !page.html) {
           unknowns.push(`discussion source unreachable: ${r.url}`);
@@ -131,6 +163,9 @@ export async function researchCompany(input: { company_url: string }, deps: Rese
         pages_used.push(r.url);
         fetches += 1;
       }
+    }
+    if (discussion.length === 0 && filteredOut > 0) {
+      unknowns.push("public discussion search returned no company-specific results");
     }
   }
 

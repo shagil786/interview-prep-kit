@@ -157,4 +157,58 @@ describe("runPipeline", () => {
       runPipeline({ id: "case-04", jd: "   ", company_url: origin, days: 3 }, deps()),
     ).rejects.toBeInstanceOf(PipelineError);
   });
+
+  it("second pass: closes a must-gap the draft left and records passes 2", async () => {
+    // Responder that, on the broad DRAFT call (several requirements listed),
+    // only writes a question for the FIRST requirement — deliberately leaving
+    // r2 uncovered. On a targeted gap-fill call (exactly one requirement
+    // listed), it answers that requirement. Code, not the model, decides the
+    // gap and the repair round.
+    const gapResponder = (_index: number, opts: LlmGenerateOpts): unknown => {
+      const prompt = opts.prompt;
+      if (prompt.includes('"flashcards"')) {
+        return { flashcards: [{ front: "Q?", back: "A", requirement_ids: ["r1", "r2"] }] };
+      }
+      if (/Category: (\w+)/.test(prompt)) {
+        const ids = Array.from(prompt.matchAll(/^- (r\d+):/gm)).map((m) => m[1]);
+        const targets = ids.length === 1 ? ids : ids.slice(0, 1);
+        return {
+          questions: targets.map((id) => ({
+            requirement_ids: [id],
+            prompt: `question for ${id}`,
+            answer_outline: "outline",
+            difficulty: 2,
+          })),
+        };
+      }
+      return {
+        title: "Engineer",
+        seniority: "mid",
+        location: "",
+        requirements: [
+          { text: "Kubernetes", kind: "technical", priority: "must" },
+          { text: "GraphQL", kind: "technical", priority: "must" },
+        ],
+      };
+    };
+    const fetcher = createFetcher();
+    const provider = createFakeProvider([gapResponder]);
+    const { kit } = await runPipeline(
+      { id: "case-gap", jd: "Engineer with Kubernetes and GraphQL, both required.", company_url: origin, days: 2 },
+      {
+        provider,
+        search: createFakeSearch(() => []),
+        fetchHtml: fetcher.fetchHtml,
+        isAllowed: async (u) => isAllowed(u, robotsFetcher),
+        crawlDelayMs: async () => 0,
+      },
+    );
+    expect(kit.coverage.passes).toBe(2);
+    expect(kit.coverage.uncovered_requirement_ids).toEqual([]);
+    for (const rid of ["r1", "r2"]) {
+      expect(kit.questions.some((q) => q.requirement_ids.includes(rid))).toBe(true);
+    }
+    expect(validateKit(kit)).toEqual([]);
+    expect(kit.schedule.days).toHaveLength(2);
+  });
 });
