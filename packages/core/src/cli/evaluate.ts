@@ -2,7 +2,7 @@ import "dotenv/config";
 import { createFetcher } from "../retrieval/fetch.js";
 import { providerFromEnv } from "../llm/factory.js";
 import type { LlmProvider } from "../llm/provider.js";
-import { createFakeSearch, createSearch } from "../retrieval/search.js";
+import { searchFromEnv } from "../retrieval/searchFactory.js";
 import { TokenBucketLimiter } from "../engine/rateLimit.js";
 import { runPipeline, type PipelineDeps } from "../engine/pipeline.js";
 import type { Kit } from "../schema/kit.js";
@@ -81,8 +81,10 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv, log: (line: s
     log(`error: ${(err as Error).message}`);
     return 2;
   }
-  const braveKey = env.BRAVE_API_KEY?.trim();
-  if (!braveKey) log("warning: BRAVE_API_KEY is not set — public-discussion search will be skipped");
+  const searchBackend = searchFromEnv(env);
+  if (searchBackend.providerLabel.startsWith("none")) {
+    log(`warning: ${searchBackend.providerLabel.replace("none (", "").replace(")", "")}`);
+  }
 
   let cases: CaseRow[];
   try {
@@ -99,9 +101,7 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv, log: (line: s
   const rpm = Number(env.PREP_RPM ?? 12) || 12;
   const limiter = new TokenBucketLimiter({ capacity: Math.max(4, Math.floor(rpm / 3)), refillPerSec: rpm / 60 });
   const fetcher = createFetcher();
-  const search = braveKey
-    ? createSearch(braveKey)
-    : createFakeSearch(() => []); // honest: nothing will be found, recorded as unknowns
+  const search = searchBackend.search;
 
   const deps: PipelineDeps = {
     provider,
