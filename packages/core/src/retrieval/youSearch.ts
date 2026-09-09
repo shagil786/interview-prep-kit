@@ -49,7 +49,10 @@ function asArray(rec: Record<string, unknown>, paths: string[]): unknown[] | nul
  */
 export function mapYouResponse(json: unknown): SearchResult[] {
   if (!json || typeof json !== "object") return [];
-  const list = asArray(json as Record<string, unknown>, ["web.results", "results", "hits", "webResults", "data.web.results", "data.results"]);
+  const list = asArray(json as Record<string, unknown>, [
+    // verified live: {"results":{"web":[{url,title,description,...}]}}
+    "results.web", "web.results", "results", "hits", "webResults", "data.web.results", "data.results",
+  ]);
   if (!list) return [];
   const out: SearchResult[] = [];
   for (const item of list) {
