@@ -11,7 +11,7 @@ export interface CleanedPage {
 export type PageRole = "homepage" | "about" | "careers" | "hiring-process" | "blog" | "other";
 
 const BOILERPLATE = "script, style, nav, footer, form, aside, noscript, svg, template";
-const TEXT_BLOCKS = "p, li, h1, h2, h3, h4, h5, h6, blockquote";
+const TEXT_BLOCKS = "p, li, h1, h2, h3, h4, h5, h6, blockquote, dt, dd, td, pre, figcaption";
 
 /** Parse HTML into title, main text, and links after stripping boilerplate. */
 export function cleanHtml(html: string, url: string): CleanedPage {
@@ -34,21 +34,36 @@ export function cleanHtml(html: string, url: string): CleanedPage {
 }
 
 /**
- * Extract reading text as newline-separated lines from content blocks
- * (p/li/headings/blockquote), collapsing each block to single spaces. Keeps
- * block boundaries so adjacent blocks never merge on minified HTML, drops
- * empty lines and boilerplate that repeats verbatim 3+ times (cookie bars,
- * banners, "share this"), then caps length.
+ * Extract reading text as newline-separated lines from content blocks,
+ * collapsing each block to single spaces. Keeps block boundaries so adjacent
+ * blocks never merge on minified HTML, drops empty lines and boilerplate that
+ * repeats verbatim 3+ times (cookie bars, banners, "share this"), then caps.
+ * Nested blocks (e.g. a <p> inside a <blockquote>) emit identical adjacent
+ * lines, which are collapsed to one. If the block walk finds nothing at all
+ * (prose in bare <div>s or direct text nodes), fall back to the scope's own
+ * collapsed text so no content is silently lost.
  */
-function extractBlocks($: cheerio.CheerioAPI, scope: ReturnType<cheerio.CheerioAPI>) {
+function extractBlocks($: cheerio.CheerioAPI, scope: ReturnType<cheerio.CheerioAPI>): string {
   const lines: string[] = [];
   scope.find(TEXT_BLOCKS).each((_, el) => {
     const line = $(el).text().replace(/\s+/g, " ").trim();
     if (line.length > 0) lines.push(line);
   });
+
+  // Drop lines repeated verbatim 3+ times (cookie bars, banners)…
   const counts = new Map<string, number>();
   for (const line of lines) counts.set(line, (counts.get(line) ?? 0) + 1);
-  const kept = lines.filter((line) => (counts.get(line) ?? 0) < 3);
+  const filtered = lines.filter((line) => (counts.get(line) ?? 0) < 3);
+
+  // …then collapse adjacent identical lines from nested blocks (<blockquote><p>…).
+  let kept = filtered.filter((line, i) => line !== filtered[i - 1]);
+
+  // If no content block matched at all (prose in bare <div>s or text nodes),
+  // fall back to the scope's own collapsed text so nothing is silently lost.
+  if (kept.length === 0) {
+    const raw = scope.text().replace(/\s+/g, " ").trim();
+    if (raw) kept = [raw];
+  }
   return kept.join("\n").slice(0, TEXT_CAP);
 }
 

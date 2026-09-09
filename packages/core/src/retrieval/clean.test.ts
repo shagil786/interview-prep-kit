@@ -48,6 +48,21 @@ describe("cleanHtml", () => {
     expect(out.text).toContain("Unique content here.");
     expect(out.text).not.toContain("Sign up");
   });
+
+  it("retains prose wrapped in bare divs (no content blocks)", () => {
+    const html =
+      "<main><div><div>We move data fast across regions.</div></div>" +
+      "<div>Our second paragraph lives in a div too.</div></main>";
+    const out = cleanHtml(html, "https://acme.example/x");
+    expect(out.text).toContain("We move data fast");
+    expect(out.text).toContain("second paragraph");
+  });
+
+  it("does not double-count a paragraph nested inside a blockquote", () => {
+    const html = "<main><blockquote><p>A single nested quote.</p></blockquote></main>";
+    const out = cleanHtml(html, "https://acme.example/x");
+    expect(out.text.match(/A single nested quote\./g)).toHaveLength(1);
+  });
 });
 
 describe("classifyPage", () => {
