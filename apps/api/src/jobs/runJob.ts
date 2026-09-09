@@ -24,35 +24,45 @@ export async function runJob(kitId: string, deps?: PipelineDeps): Promise<void> 
     if (!doc) return;
     if (doc.status !== "generating") return;
 
+    // All writes go through atomic updateOne on a chained promise: progress
+    // callbacks fire asynchronously, and a racing document .save() would throw
+    // ParallelSaveError and crash the process (seen during the live audit).
+    let writeChain: Promise<unknown> = Promise.resolve();
+    const persist = (patch: Record<string, unknown>): Promise<unknown> => {
+      writeChain = writeChain.then(() => KitModel.updateOne({ _id: kitId }, { $set: patch }).catch(() => undefined));
+      return writeChain;
+    };
+
     try {
       const pipelineDeps = deps ?? pipelineDepsFromEnv();
       const input = { id: kitId, jd: doc.caseInput.jd, company_url: doc.caseInput.company_url, days: doc.caseInput.days };
       const { kit, job } = await pipelineImpl(input, {
         ...pipelineDeps,
         onProgress: (j) => {
-          void saveProgress(doc, jobToSteps(j));
+          void persist({ job: { steps: jobToSteps(j) } });
         },
       });
-      doc.kit = kit;
-      doc.overlay = overlayFor(kit);
-      doc.research = { pages_used: kit.source.pages_used };
-      doc.job = jobToSteps(job) ? { steps: jobToSteps(job) } : (job as { steps: unknown[] });
-      doc.status = "ready";
-      doc.error = null;
-      await doc.save();
+      await writeChain;
+      await persist({
+        kit,
+        overlay: overlayFor(kit),
+        research: { pages_used: kit.source.pages_used },
+        job: { steps: jobToSteps(job) },
+        status: "ready",
+        error: null,
+      });
     } catch (err) {
+      await writeChain;
       const message = (err as Error).message ?? String(err);
       const code = (err as { code?: string }).code ?? "GENERATION_FAILED";
-      doc.status = "failed";
-      doc.error = { code, message };
-      const steps = (doc.job?.steps ?? []) as { status: string }[];
+      const fresh = await KitModel.findById(kitId);
+      const steps = ((fresh?.job?.steps ?? []) as { status: string; detail?: string }[]);
       const last = steps[steps.length - 1];
       if (last && last.status === "running") {
-        (last as { status: string; detail?: string }).status = "failed";
-        (last as { detail?: string }).detail = message;
-        doc.markModified("job");
+        last.status = "failed";
+        last.detail = message;
       }
-      await doc.save();
+      await persist({ status: "failed", error: { code, message }, job: { steps } });
     }
   });
 }
@@ -64,11 +74,6 @@ function overlayFor(kit: KitDoc["kit"]): unknown {
   const flashcards: Record<string, { origin: "generated"; edited_by_user: boolean; pinned: boolean }> = {};
   for (const f of kit.flashcards) flashcards[f.id] = { origin: "generated", edited_by_user: false, pinned: false };
   return { brief: { origin: "generated", edited_by_user: false, pinned: false }, questions, flashcards };
-}
-
-async function saveProgress(doc: InstanceType<typeof KitModel>, steps: unknown[]): Promise<void> {
-  doc.job = { steps };
-  await doc.save().catch(() => undefined);
 }
 
 /** Tolerate both Job instances (toJSON) and plain {steps} snapshots (tests). */

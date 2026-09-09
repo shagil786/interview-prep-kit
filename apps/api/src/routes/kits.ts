@@ -4,7 +4,7 @@ import { z } from "zod";
 import { caseSchema, validateKit, type Kit } from "@prep/core";
 import { KitModel, kitToClient } from "../models/kit.js";
 import { requireAuth } from "../middleware/requireAuth.js";
-import { applyEdit, type KitEdit } from "../edit/applyEdit.js";
+import { applyEdit, isKitEdit } from "../edit/applyEdit.js";
 import { regenerate, type RegenerateScope } from "../regenerate/regenerate.js";
 import { runJob } from "../jobs/runJob.js";
 
@@ -135,13 +135,13 @@ kitsRouter.patch("/:kitId", async (req: Request, res: Response) => {
     return;
   }
   const parsed = editSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: { code: "INVALID_INPUT", message: "Expected {edit: {...}}." } });
+  if (!parsed.success || !isKitEdit(parsed.data.edit)) {
+    res.status(400).json({ error: { code: "INVALID_INPUT", message: "Expected {edit: {type: one of upsertQuestion|deleteQuestion|moveQuestionCategory|reorderQuestions|upsertFlashcard|deleteFlashcard|updateBrief|updateDay|pin, …}}." } });
     return;
   }
   const overlay = (doc.overlay ?? { questions: {}, flashcards: {} }) as { questions: Record<string, unknown>; flashcards: Record<string, unknown> };
   const cloned = structuredClone(doc.kit) as Kit;
-  const result = applyEdit(cloned, overlay as Parameters<typeof applyEdit>[1], parsed.data.edit as KitEdit);
+  const result = applyEdit(cloned, overlay as Parameters<typeof applyEdit>[1], parsed.data.edit);
   const violations = validateKit(result.kit);
   if (violations.length > 0) {
     res.status(400).json({ error: { code: "INVALID_KIT", message: violations.join("; ") } });
@@ -149,6 +149,8 @@ kitsRouter.patch("/:kitId", async (req: Request, res: Response) => {
   }
   doc.kit = result.kit;
   doc.overlay = result.overlay;
+  doc.markModified("kit");
+  doc.markModified("overlay");
   await doc.save();
   res.json({ kit: kitToClient(doc) });
 });
@@ -177,6 +179,8 @@ kitsRouter.post("/:kitId/regenerate", async (req: Request, res: Response) => {
     );
     doc.kit = result.kit;
     doc.overlay = result.overlay;
+    doc.markModified("kit");
+    doc.markModified("overlay");
     await doc.save();
     res.json({ kit: kitToClient(doc) });
   } catch (err) {

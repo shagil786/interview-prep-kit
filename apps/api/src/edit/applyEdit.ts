@@ -34,6 +34,16 @@ function updateInPlace<T extends { id: string }>(items: T[], id: string, patch: 
  * question marks it edited_by_user so regeneration never replaces it; deleting
  * a question removes it from every schedule day (spec §6.3 remap by deletion).
  */
+const EDIT_TYPES = new Set([
+  "upsertQuestion", "deleteQuestion", "moveQuestionCategory", "reorderQuestions",
+  "upsertFlashcard", "deleteFlashcard", "updateBrief", "updateDay", "pin",
+]);
+
+export function isKitEdit(value: unknown): value is KitEdit {
+  const v = value as { type?: unknown } | null;
+  return !!v && typeof v.type === "string" && EDIT_TYPES.has(v.type);
+}
+
 export function applyEdit(kit: Kit, overlay: Overlay, edit: KitEdit): ApplyResult {
   const nextOverlay: Overlay = {
     brief: overlay.brief,

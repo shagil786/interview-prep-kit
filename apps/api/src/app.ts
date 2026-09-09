@@ -1,8 +1,9 @@
+import mongoose from "mongoose";
 import cors from "cors";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import session from "express-session";
 import helmet from "helmet";
-import MongoStoreFactory from "connect-mongodb-session";
+import { MongooseSessionStore } from "./auth/sessionStore.js";
 import { authRouter } from "./routes/auth.js";
 import { kitsRouter } from "./routes/kits.js";
 import { practiceRouter } from "./routes/practice.js";
@@ -26,11 +27,22 @@ export function createApp(config: AppConfig): Express {
   );
   app.use(express.json({ limit: "2mb" }));
 
-  const MongoStore = MongoStoreFactory(session);
-  const store =
-    config.mongoUri != null
-      ? new MongoStore({ uri: config.mongoUri, collection: "sessions" })
-      : new session.MemoryStore();
+  // Structured 503 while the database is unreachable, instead of buffering
+  // for 10s or erroring inside a handler. /health stays open for monitoring.
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.path !== "/health" && mongoose.connection.readyState !== 1) {
+      res.status(503).json({
+        error: { code: "DB_UNAVAILABLE", message: "The server cannot reach its database right now. If this is your Atlas cluster, add your current IP to its Network Access list." },
+      });
+      return;
+    }
+    next();
+  });
+
+  // Session store: backed by the app's own mongoose connection (see
+  // auth/sessionStore.ts) so a dropped DB never wedges requests — while the
+  // DB is down the session route gate below answers a clean 503.
+  const store: session.Store = config.mongoUri ? new MongooseSessionStore() : new session.MemoryStore();
 
   app.use(
     session({
@@ -49,7 +61,7 @@ export function createApp(config: AppConfig): Express {
   );
 
   app.get("/health", (_req: Request, res: Response) => {
-    res.json({ ok: true });
+    res.json({ ok: true, db: mongoose.connection.readyState === 1 });
   });
 
   app.use("/auth", authRouter);
