@@ -211,4 +211,44 @@ describe("runPipeline", () => {
     expect(validateKit(kit)).toEqual([]);
     expect(kit.schedule.days).toHaveLength(2);
   });
+
+  it("weak-model resilience: a provider that ignores requirement_ids still yields covered musts", async () => {
+    // Bedrock GLM-4.7-flash showed this in a live run: well-formed objects but
+    // no/loose requirement_ids, which sanitize-to-nothing. Code's deterministic
+    // fallback must close every must afterwards.
+    const weakResponder = (_index: number, opts: LlmGenerateOpts): unknown => {
+      const prompt = opts.prompt;
+      if (prompt.includes('"flashcards"')) {
+        return { flashcards: [{ front: "Q?", back: "A", requirement_ids: ["r1"] }] };
+      }
+      if (/Category: (\w+)/.test(prompt)) {
+        return { questions: [{ requirement_ids: [], prompt: "generic question", answer_outline: "outline", difficulty: 2 }] };
+      }
+      return {
+        title: "Engineer", seniority: "mid", location: "",
+        requirements: [
+          { text: "Distributed systems", kind: "technical", priority: "must" },
+          { text: "Stakeholder communication", kind: "behavioural", priority: "must" },
+        ],
+      };
+    };
+    const fetcher = createFetcher();
+    const provider = createFakeProvider([weakResponder]);
+    const { kit } = await runPipeline(
+      { id: "case-weak", jd: "Engineer with distributed systems and stakeholder communication, both required.", company_url: origin, days: 2 },
+      {
+        provider,
+        search: createFakeSearch(() => []),
+        fetchHtml: fetcher.fetchHtml,
+        isAllowed: async (u) => isAllowed(u, robotsFetcher),
+        crawlDelayMs: async () => 0,
+      },
+    );
+    expect(validateKit(kit)).toEqual([]);
+    // every must is covered by *some* question (deterministic fallbacks)
+    for (const rid of ["r1", "r2"]) {
+      expect(kit.questions.some((q) => q.requirement_ids.includes(rid))).toBe(true);
+    }
+    expect(kit.coverage.uncovered_requirement_ids.filter((id) => ["r1", "r2"].includes(id))).toEqual([]);
+  });
 });

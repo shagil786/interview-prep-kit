@@ -216,7 +216,32 @@ export async function runPipeline(input: CaseInput, deps: PipelineDeps): Promise
     },
   });
   questions = [...questions, ...balanced];
-  job.succeed(`${questions.length} question(s) generated`);
+
+  // Deterministic last resort (weak-model resilience): after all model passes,
+  // every still-uncovered MUST gets a code-generated experience question; if
+  // the model produced nothing at all, one uncovered requirement (any
+  // priority) is covered so the kit meets the schema minimum. No requirements
+  // are invented (text is the JD's own); this guarantees the assessment's core
+  // rule — no shipped kit with an uncovered must — even when the provider
+  // ignores the requirement_ids instruction.
+  const coveredAfterModel = new Set(questions.flatMap((q) => q.requirement_ids));
+  const uncoveredMusts = requirements.filter((r) => r.priority === "must" && !coveredAfterModel.has(r.id));
+  const fallbackReqs =
+    uncoveredMusts.length > 0
+      ? uncoveredMusts
+      : questions.length === 0
+        ? requirements.filter((r) => !coveredAfterModel.has(r.id)).slice(0, 1)
+        : [];
+  for (const r of fallbackReqs) {
+    questions.push({
+      requirement_ids: [r.id],
+      category: r.kind === "behavioural" ? "behavioural" : "technical",
+      prompt: `Tell me about a time you applied this: ${r.text}`,
+      answer_outline: "Situation, the actions you took, and measurable results or what you learned.",
+      difficulty: 2,
+    });
+  }
+  job.succeed(`${questions.length} question(s) generated${fallbackReqs.length > 0 ? ` (${fallbackReqs.length} deterministic fallback${fallbackReqs.length > 1 ? "s" : ""})` : ""}`);
   progress();
 
   // Assign stable ids; flashcards and schedule reference them afterwards.

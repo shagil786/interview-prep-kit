@@ -96,6 +96,11 @@ describe("providerFromEnv", () => {
     expect(() => providerFromEnv(env({ LLM_PROVIDER: "claude" }))).toThrow(/unknown LLM_PROVIDER/);
   });
 
+  it("builds a bedrock provider without immediate credential need", () => {
+    const provider = providerFromEnv(env({ LLM_PROVIDER: "bedrock", BEDROCK_MODEL: "zai.glm-4.7-flash" }));
+    expect(typeof provider.generateJson).toBe("function");
+  });
+
   it("builds an openai-compatible provider and requires its credentials", () => {
     expect(() => providerFromEnv(env({ LLM_PROVIDER: "openai-compatible" }))).toThrow(/OPENAI_COMPATIBLE_BASE_URL/);
     const provider = providerFromEnv(
