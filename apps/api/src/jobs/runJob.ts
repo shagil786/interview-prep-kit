@@ -50,6 +50,7 @@ export async function runJob(kitId: string, deps?: PipelineDeps): Promise<void> 
       if (last && last.status === "running") {
         (last as { status: string; detail?: string }).status = "failed";
         (last as { detail?: string }).detail = message;
+        doc.markModified("job");
       }
       await doc.save();
     }

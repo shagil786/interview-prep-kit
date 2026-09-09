@@ -59,8 +59,17 @@ export function createApp(config: AppConfig): Express {
   });
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-    res.status(500).json({ error: { code: "INTERNAL", message: err.message ?? "Unexpected error." } });
+  app.use((err: Error & { type?: string; status?: number }, _req: Request, res: Response, _next: NextFunction) => {
+    const type = err.type ?? "";
+    if (type.startsWith("entity.parse.failed")) {
+      res.status(400).json({ error: { code: "INVALID_JSON", message: "Request body is not valid JSON." } });
+      return;
+    }
+    if (type.startsWith("entity.too.large")) {
+      res.status(413).json({ error: { code: "TOO_LARGE", message: "Request body is too large." } });
+      return;
+    }
+    res.status(err.status ?? 500).json({ error: { code: "INTERNAL", message: err.message ?? "Unexpected error." } });
   });
 
   return app;

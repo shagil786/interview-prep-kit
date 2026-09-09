@@ -12,7 +12,10 @@ import {
 } from "@prep/core";
 
 export interface EnvServices {
+  /** Resilient provider for standalone stage calls (e.g. mock scoring). */
   provider: LlmProvider;
+  /** Raw provider; runPipeline applies its own resilient wrapper + rateLimiter. */
+  rawProvider: LlmProvider;
   search: SearchLike;
   fetchHtml: PipelineDeps["fetchHtml"];
   rateLimiter: RateLimiter;
@@ -36,6 +39,7 @@ export function envServices(env: NodeJS.ProcessEnv = process.env): EnvServices {
   const search: SearchLike = braveKey ? createSearch(braveKey) : createFakeSearch(() => []);
   return {
     provider,
+    rawProvider,
     search,
     fetchHtml: createFetcher().fetchHtml,
     rateLimiter: sharedLimiter,
@@ -44,5 +48,6 @@ export function envServices(env: NodeJS.ProcessEnv = process.env): EnvServices {
 
 export function pipelineDepsFromEnv(env: NodeJS.ProcessEnv = process.env): PipelineDeps {
   const services = envServices(env);
-  return { provider: services.provider, search: services.search, fetchHtml: services.fetchHtml, rateLimiter: services.rateLimiter };
+  // Raw provider: runPipeline wraps it once with the resilient layer + limiter.
+  return { provider: services.rawProvider, search: services.search, fetchHtml: services.fetchHtml, rateLimiter: services.rateLimiter };
 }

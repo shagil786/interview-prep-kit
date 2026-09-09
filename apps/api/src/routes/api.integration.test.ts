@@ -9,7 +9,7 @@ import type { CaseInput, Kit } from "@prep/core";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import { setPipelineForTests } from "../jobs/runJob.js";
 import { createApp } from "../app.js";
-import { disconnectDb } from "../db.js";
+import { connectDb, disconnectDb } from "../db.js";
 
 const enabled = process.env.RUN_DB === "1";
 describe.skipIf(!enabled)("API integration (RUN_DB=1)", () => {
@@ -18,6 +18,7 @@ describe.skipIf(!enabled)("API integration (RUN_DB=1)", () => {
 
   beforeAll(async () => {
     mongo = await MongoMemoryServer.create();
+    await connectDb(mongo.getUri());
     app = createApp({ mongoUri: mongo.getUri(), sessionSecret: "test-secret", corsOrigin: ["http://localhost:3000"] });
     setPipelineForTests((async (input: CaseInput): Promise<{ kit: Kit; job: unknown }> => {
       const { KitModel } = await import("../models/kit.js");

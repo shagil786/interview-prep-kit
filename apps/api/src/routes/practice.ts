@@ -32,12 +32,19 @@ practiceRouter.post("/kits/:kitId/practice", async (req: Request, res: Response)
     res.status(400).json({ error: { code: "INVALID_INPUT", message: "confidence must be 1, 2 or 3." } });
     return;
   }
-  const practice = doc.practice ?? [];
-  practice.push({ card_id: cardId, confidence: Number(confidence) as PracticeEntry["confidence"], at: new Date() });
-  // Bound: keep the latest 20 attempts per card.
-  const perCard = new Map<string, number>();
-  for (const p of practice) perCard.set(p.card_id, (perCard.get(p.card_id) ?? 0) + 1);
-  doc.practice = practice.filter((p) => (perCard.get(p.card_id) ?? 0) <= 20);
+  type Stored = { card_id: string; confidence: 1 | 2 | 3; at: Date };
+  const practice: Stored[] = (doc.practice ?? []) as Stored[];
+  practice.push({ card_id: cardId, confidence: Number(confidence) as Stored["confidence"], at: new Date() });
+  // Bound: keep the LATEST 20 attempts per card.
+  const byCard = new Map<string, Stored[]>();
+  for (const entry of practice) {
+    const list = byCard.get(entry.card_id) ?? [];
+    list.push(entry);
+    byCard.set(entry.card_id, list);
+  }
+  const capped: Stored[] = [];
+  for (const list of byCard.values()) capped.push(...list.slice(-20));
+  doc.practice = capped;
   await doc.save();
   res.status(201).json({ ok: true });
 });
@@ -80,7 +87,8 @@ practiceRouter.post("/kits/:kitId/mock/session", async (req: Request, res: Respo
   }
   const take = Math.min(Number(count) || questions.length, questions.length);
   // Deterministic rotation seeded by the kit id so sessions are stable per kit.
-  const offset = owned.doc.id.length % questions.length;
+  const seed = [...owned.doc.id].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  const offset = seed % questions.length;
   const rotated = [...questions.slice(offset), ...questions.slice(0, offset)];
   const session: MockSession = {
     sessionId: `${owned.doc.id}-${Date.now()}`,

@@ -13,6 +13,7 @@ import {
   type QuestionCategory,
   type RequirementLike,
 } from "@prep/core";
+import { createResilientProvider } from "@prep/core";
 import { pipelineDepsFromEnv } from "../jobs/envDeps.js";
 import { isReplaceable, type Overlay } from "../edit/overlay.js";
 
@@ -55,12 +56,13 @@ export async function regenerate(
   }
 
   const services = deps ?? pipelineDepsFromEnv();
+  const provider = deps?.rateLimiter ? createResilientProvider(deps.provider, { rateLimiter: deps.rateLimiter }) : services.provider;
   const research = await runResearch(input.company_url, services);
 
   if (scope === "brief") {
     const meta = nextOverlay.brief;
     if (!isReplaceable(meta)) return { kit, overlay }; // user-edited brief survives
-    const brief = await generateBrief(research, services.provider);
+    const brief = await generateBrief(research, provider);
     next.company_brief = { ...brief };
     nextOverlay.brief = { origin: "generated", edited_by_user: false, pinned: false };
     finish(next);
@@ -78,7 +80,7 @@ export async function regenerate(
         hiringProcess: research.hiring_process,
         companyExcerpts: research.what_they_do_excerpts,
       },
-      services.provider,
+      provider,
     );
     const nextIds: string[] = [];
     for (const s of survivors) nextIds.push(s.id);
@@ -104,7 +106,7 @@ export async function regenerate(
     const survivors = next.flashcards.filter((f) => !isReplaceable(nextOverlay.flashcards[f.id]));
     const drafts = await generateFlashcards(
       { requirements: asRequirementLike(next), questions: next.questions.map((q) => ({ id: q.id, prompt: q.prompt })) },
-      services.provider,
+      provider,
     );
     const allIds = next.flashcards.map((f) => f.id);
     const added: Kit["flashcards"] = [];

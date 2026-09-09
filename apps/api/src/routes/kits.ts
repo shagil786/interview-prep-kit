@@ -63,17 +63,26 @@ kitsRouter.post("/", async (req: Request, res: Response) => {
 });
 
 kitsRouter.post("/bulk", async (req: Request, res: Response) => {
-  const body = z.array(newKitSchema).safeParse(req.body);
-  if (!body.success) {
+  // Body is a JSON array of rows (the web client parses .json/.csv files
+  // into this shape). Each row is validated independently so one bad row
+  // never aborts the rest of the batch.
+  const rows = Array.isArray(req.body) ? req.body : null;
+  if (!rows) {
     res.status(400).json({ error: { code: "INVALID_INPUT", message: "Expected an array of {jd, company_url, days}." } });
     return;
   }
-  const results: { jd: string; company_url: string; status: string; id?: string }[] = [];
-  for (const input of body.data) {
+  const results: { index: number; jd: string; company_url: string; status: string; id?: string; error?: string }[] = [];
+  for (let index = 0; index < rows.length; index += 1) {
+    const parsedRow = newKitSchema.safeParse(rows[index]);
+    if (!parsedRow.success) {
+      results.push({ index, jd: "", company_url: "", status: "invalid", error: parsedRow.error.issues.map((x) => x.message).join("; ") });
+      continue;
+    }
+    const input = parsedRow.data;
     const hash = jdHash(input.jd, input.company_url);
     const existing = await KitModel.findOne({ userId: res.locals.userId, jdHash: hash, status: { $in: ["generating", "ready"] } });
     if (existing) {
-      results.push({ jd: input.jd.slice(0, 40), company_url: input.company_url, status: "duplicate", id: existing.id });
+      results.push({ index, jd: input.jd.slice(0, 40), company_url: input.company_url, status: "duplicate", id: existing.id });
       continue;
     }
     const doc = await KitModel.create({
@@ -86,7 +95,7 @@ kitsRouter.post("/bulk", async (req: Request, res: Response) => {
       job: { steps: [] },
     });
     void runJob(doc.id);
-    results.push({ jd: input.jd.slice(0, 40), company_url: input.company_url, status: "started", id: doc.id });
+    results.push({ index, jd: input.jd.slice(0, 40), company_url: input.company_url, status: "started", id: doc.id });
   }
   res.status(202).json({ results });
 });
