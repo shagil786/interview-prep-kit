@@ -2,19 +2,43 @@ services:
   - type: web
     name: prepkit-api
     runtime: node
+    NodeVersion: "24"
     rootDir: .
     buildCommand: npm install && npm run build -w @prep/api
     startCommand: npm run start -w @prep/api
+    healthCheckPath: /health
     envVars:
+      - key: NODE_ENV
+        value: production
       - key: MONGODB_URI
         sync: false
       - key: SESSION_SECRET
         generateValue: true
+      # LLM provider — set LLM_PROVIDER to one of: bedrock | openai-compatible | gemini
+      - key: LLM_PROVIDER
+        sync: false
+      # bedrock path (fill if LLM_PROVIDER=bedrock)
+      - key: BEDROCK_MODEL
+        value: zai.glm-5
+      - key: BEDROCK_REGION
+        value: ap-south-1
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      # openai-compatible path (fill if LLM_PROVIDER=openai-compatible)
+      - key: OPENAI_COMPATIBLE_BASE_URL
+        sync: false
+      - key: OPENAI_COMPATIBLE_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        sync: false
+      # gemini path (default)
       - key: GEMINI_API_KEY
         sync: false
+      # search
       - key: BRAVE_API_KEY
         sync: false
+      # web origin(s), comma-separated
       - key: CORS_ORIGIN
         sync: false
-      - key: NODE_ENV
-        value: production
