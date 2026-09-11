@@ -1,10 +1,13 @@
 /**
- * Real-LLM timing smoke test. Skipped unless RUN_SMOKE=1 (needs GEMINI_API_KEY
- * + BRAVE_API_KEY). Validates that the full evaluate path completes against
- * real local fixture sites and that every ok kit validates — the acceptance
- * bar for the assessment's 5-cases-in-15-minutes requirement.
+ * Real-LLM timing smoke test. Skipped unless RUN_SMOKE=1 (needs the LLM
+ * provider env — LLM_PROVIDER + its credentials — from the repo-root .env).
+ * Validates that the full evaluate path completes against real local fixture
+ * sites and that every ok kit validates — the acceptance bar for the
+ * assessment's 5-cases-in-15-minutes requirement.
  */
 import { describe, expect, it } from "vitest";
+import dotenv from "dotenv";
+import { fileURLToPath } from "node:url";
 import { runBatch } from "./evaluate.js";
 import { providerFromEnv } from "../llm/factory.js";
 import { searchFromEnv } from "../retrieval/searchFactory.js";
@@ -13,6 +16,11 @@ import { TokenBucketLimiter } from "../engine/rateLimit.js";
 import { companySite, companySiteWithHandbook, startFixtureServer } from "../fixtures/server.js";
 import { validateKit } from "../validate/validateKit.js";
 import type { PipelineDeps } from "../engine/pipeline.js";
+
+// vitest runs with cwd = packages/core and this file sits four levels deep
+// (src/cli); load the repo-root .env explicitly so LLM_PROVIDER and its
+// credentials resolve the same way the CLI sees them from the root.
+dotenv.config({ path: fileURLToPath(new URL("../../../../.env", import.meta.url)) });
 
 const enabled = process.env.RUN_SMOKE === "1";
 describe.skipIf(!enabled)("evaluate smoke (real LLM, RUN_SMOKE=1)", () => {
