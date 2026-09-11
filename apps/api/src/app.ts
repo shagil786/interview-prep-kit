@@ -53,7 +53,9 @@ export function createApp(config: AppConfig): Express {
       saveUninitialized: false,
       cookie: {
         httpOnly: true,
-        sameSite: "lax",
+        // Production API (Render) is cross-site from the web (Vercel), so the
+        // session cookie must be SameSite=None + Secure or browsers drop it.
+        sameSite: config.secureCookies ? "none" : "lax",
         secure: config.secureCookies ?? false,
         maxAge: 1000 * 60 * 60 * 24 * 14,
       },
