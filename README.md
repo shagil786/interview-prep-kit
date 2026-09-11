@@ -6,8 +6,11 @@ generates a structured prep kit — company brief, role breakdown, categorised q
 flashcards, and a day-by-day schedule. You can reshape any part of it, regenerate single sections
 without losing your edits, and practise against it.
 
-**Live demo / deployment:** see the "Deployment" section below for the public URLs (frontend +
-backend) and the batch entry point.
+**Live deployment:** frontend **https://interview-prep-kit-web-xi.vercel.app** · backend
+**https://prepkit-api-yjnm.onrender.com** (health: `/health`). Public source:
+**https://github.com/shagil786/interview-prep-kit**.
+
+> The Render free instance sleeps after inactivity — the first request after idle can take ~50s.
 
 ## Repo layout
 
