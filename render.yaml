@@ -43,4 +43,4 @@ services:
         sync: false
       # web origin(s), comma-separated
       - key: CORS_ORIGIN
-        sync: false
+        value: https://interview-prep-kit-web-xi.vercel.app
