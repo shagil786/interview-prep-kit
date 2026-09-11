@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, notifyAuthChange } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
     setBusy(true);
     try {
       await api.post(`/auth/${register ? "register" : "login"}`, { email, password });
+      notifyAuthChange();
       toast.success(register ? "Account created — welcome!" : "Welcome back.");
       router.push("/dashboard");
       router.refresh();

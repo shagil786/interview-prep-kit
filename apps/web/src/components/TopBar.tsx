@@ -5,13 +5,22 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { api, currentUser } from "@/lib/api";
+import { api, currentUser, AUTH_EVENT } from "@/lib/api";
 
 export default function TopBar() {
   const [email, setEmail] = useState<string | null>(null);
   const router = useRouter();
   useEffect(() => {
-    currentUser().then((u) => setEmail(u?.email ?? null)).catch(() => setEmail(null));
+    const refresh = () => {
+      currentUser().then((u) => setEmail(u?.email ?? null)).catch(() => setEmail(null));
+    };
+    refresh();
+    window.addEventListener(AUTH_EVENT, refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.removeEventListener(AUTH_EVENT, refresh);
+      window.removeEventListener("focus", refresh);
+    };
   }, []);
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -37,6 +46,7 @@ export default function TopBar() {
                 onClick={async () => {
                   await api.post("/auth/logout", {}).catch(() => undefined);
                   setEmail(null);
+                  window.dispatchEvent(new Event(AUTH_EVENT));
                   router.push("/");
                   router.refresh();
                 }}

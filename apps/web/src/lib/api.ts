@@ -45,3 +45,9 @@ export async function currentUser(): Promise<{ id: string; email: string } | nul
     return null;
   }
 }
+
+/** Lightweight auth-change bus: fired after login/logout so the TopBar refreshes. */
+export const AUTH_EVENT = "prepkit:auth";
+export function notifyAuthChange(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(AUTH_EVENT));
+}
