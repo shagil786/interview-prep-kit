@@ -1,6 +1,7 @@
 services:
   - type: web
     name: prepkit-api
+    plan: free
     runtime: node
     rootDir: .
     buildCommand: npm install && npm run build -w @prep/api
