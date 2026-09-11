@@ -25,7 +25,7 @@ export class MongooseSessionStore extends session.Store {
     });
   }
 
-  override get(sid: string, callback: (err: unknown, session?: session.SessionData | null) => void): void {
+  get(sid: string, callback: (err: unknown, session?: session.SessionData | null) => void): void {
     if (mongoose.connection.readyState !== 1) {
       callback(new Error("database unavailable"));
       return;
@@ -40,7 +40,7 @@ export class MongooseSessionStore extends session.Store {
     }, callback);
   }
 
-  override set(sid: string, sess: session.SessionData, callback?: (err?: unknown) => void): void {
+  set(sid: string, sess: session.SessionData, callback?: (err?: unknown) => void): void {
     if (mongoose.connection.readyState !== 1) {
       callback?.(new Error("database unavailable"));
       return;
@@ -53,7 +53,7 @@ export class MongooseSessionStore extends session.Store {
     ).then(() => callback?.(), (err: unknown) => callback?.(err));
   }
 
-  override destroy(sid: string, callback?: (err?: unknown) => void): void {
+  destroy(sid: string, callback?: (err?: unknown) => void): void {
     if (mongoose.connection.readyState !== 1) {
       callback?.();
       return;
@@ -61,7 +61,7 @@ export class MongooseSessionStore extends session.Store {
     this.col.deleteOne({ _id: sid }).then(() => callback?.(), (err: unknown) => callback?.(err));
   }
 
-  override touch(sid: string, sess: session.SessionData, callback?: (err?: unknown) => void): void {
+  touch(sid: string, sess: session.SessionData, callback?: (err?: unknown) => void): void {
     if (mongoose.connection.readyState !== 1) {
       callback?.();
       return;
