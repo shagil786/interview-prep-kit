@@ -28,13 +28,17 @@ docs/          design spec + implementation plan (superpowers process docs)
 
 - **Next.js + Tailwind (web), Node + Express (API), MongoDB, TypeScript** — the assessment's
   preferred stack. TypeScript everywhere for contract safety on the exact kit schema.
-- **LLM: provider-pluggable.** Default is **Google Gemini (free tier)** via a small fetch-based
-  adapter (no SDK) with typed retryable errors; model configurable via `GEMINI_MODEL`. A generic
-  **OpenAI-compatible** adapter (`createOpenAICompatibleProvider`) covers OpenRouter/Groq/Mistral/
-  APInex-style gateways — switch with `LLM_PROVIDER=openai-compatible` + `OPENAI_COMPATIBLE_BASE_URL`/
-  `OPENAI_COMPATIBLE_API_KEY`/`LLM_MODEL` (see `.env.example`). Choosing a small reseller as the
-  documented provider is a grader risk; keep `gemini` as the repo default and use alternatives for
-  your own runs.
+- **LLM: provider-pluggable** via `LLM_PROVIDER`, three adapters sharing one contract (typed
+  retryable errors, JSON fence-stripping, usage reporting):
+  - **`gemini`** (repo default, free tier): `GEMINI_API_KEY` + `GEMINI_MODEL` (default
+    `gemini-2.5-flash`). No SDK — a fetch-based adapter against the REST API.
+  - **`bedrock`** (used for my verified runs): `BEDROCK_MODEL` (default `zai.glm-5`,
+    `ap-south-1`); credentials from AWS env vars on deploy, or the configured AWS CLI/SSO
+    session locally (`aws configure export-credentials`, auto-refreshed). Pay-per-token, no free
+    tier.
+  - **`openai-compatible`**: `createOpenAICompatibleProvider` for OpenRouter/Groq/APInex-style
+    gateways — `OPENAI_COMPATIBLE_BASE_URL`/`OPENAI_COMPATIBLE_API_KEY`/`LLM_MODEL`.
+  Graders run the **`gemini` default**; the smoke run used **Bedrock GLM-5** (see Testing).
 - **Search: pluggable**, default **Brave Search API free tier** for the "public discussion of their
   interview process" step (`SEARCH_PROVIDER=brave` + `BRAVE_API_KEY`). `SEARCH_PROVIDER=you` selects
   a You.com REST adapter (`YOU_API_KEY`) — note You.com's free tier is MCP-only (~100 queries/day),
@@ -162,6 +166,10 @@ httpOnly session cookie, server-side ownership scoping on every kit query.
 - Web: typecheck + production build green; component interactions exercised by the browser flows
   below.
 - Run everything: `npm test` (core), `npm test -w @prep/api`, `npm run typecheck`.
+- **Verified live** (`RUN_SMOKE=1`, Bedrock `zai.glm-5`): 5 cases end-to-end in **147s**
+  (budget 15 min), every kit `validateKit`-clean, ~4-7k tokens per case with per-stage usage
+  logged. A real 3-case batch (`npm run evaluate` on the sample) also completed with all kits
+  valid and every must covered.
 
 ## Creative features (optional but built)
 
