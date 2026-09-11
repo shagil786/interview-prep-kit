@@ -2,12 +2,13 @@ services:
   - type: web
     name: prepkit-api
     runtime: node
-    NodeVersion: "24"
     rootDir: .
     buildCommand: npm install && npm run build -w @prep/api
     startCommand: npm run start -w @prep/api
     healthCheckPath: /health
     envVars:
+      - key: NodeVersion
+        value: "24"
       - key: NODE_ENV
         value: production
       - key: MONGODB_URI
