@@ -21,8 +21,9 @@ export const DEFAULT_BEDROCK_REGION = "ap-south-1";
  *                                          OPENAI_COMPATIBLE_API_KEY,
  *                                          LLM_MODEL
  *   LLM_PROVIDER=bedrock                 -> BEDROCK_MODEL (+ BEDROCK_REGION);
- *                                          credentials from AWS env vars or the
- *                                          configured AWS CLI (SSO) profile
+ *                                          credentials from AWS env vars (SigV4),
+ *                                          else BEDROCK_API_KEY (bearer),
+ *                                          else the configured AWS CLI (SSO) profile
  *
  * Throws with a clear message when the selected provider's credentials are
  * missing, so CLI/API can surface a useful config error.

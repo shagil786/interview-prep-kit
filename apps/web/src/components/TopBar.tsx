@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { api, currentUser, AUTH_EVENT } from "@/lib/api";
 
 export default function TopBar() {
@@ -26,12 +27,12 @@ export default function TopBar() {
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
         <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-          <span className="grid size-6 place-items-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
+          <span className="grid size-6 place-items-center rounded-md bg-gradient-to-br from-indigo-500 to-cyan-400 text-xs font-bold text-white">
             P
           </span>
           PrepKit
         </Link>
-        <nav className="flex items-center gap-2 text-sm">
+        <nav className="flex items-center gap-1 text-sm">
           {email ? (
             <>
               <Badge variant="secondary" className="hidden max-w-[180px] truncate sm:inline-flex">
@@ -64,6 +65,7 @@ export default function TopBar() {
               </Button>
             </>
           )}
+          <ThemeToggle />
         </nav>
       </div>
     </header>

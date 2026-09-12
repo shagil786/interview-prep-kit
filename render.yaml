@@ -21,9 +21,11 @@ services:
         sync: false
       # bedrock path (fill if LLM_PROVIDER=bedrock)
       - key: BEDROCK_MODEL
-        value: zai.glm-5
+        value: zai.glm-4.7-flash
       - key: BEDROCK_REGION
         value: ap-south-1
+      - key: BEDROCK_API_KEY
+        sync: false
       - key: AWS_ACCESS_KEY_ID
         sync: false
       - key: AWS_SECRET_ACCESS_KEY
@@ -38,8 +40,12 @@ services:
       # gemini path (default)
       - key: GEMINI_API_KEY
         sync: false
-      # search
+      # search (brave default; or SEARCH_PROVIDER=you + YOU_API_KEY)
+      - key: SEARCH_PROVIDER
+        sync: false
       - key: BRAVE_API_KEY
+        sync: false
+      - key: YOU_API_KEY
         sync: false
       # web origin(s), comma-separated
       - key: CORS_ORIGIN

@@ -15,6 +15,8 @@ export interface BedrockConfig {
   region?: string;
   /** Explicit credentials (deploy). When omitted, resolved from env or the AWS CLI (dev). */
   credentials?: BedrockCredentials;
+  /** Long-term Bedrock API key (bearer auth). Falls back to BEDROCK_API_KEY env. */
+  apiKey?: string;
   fetchImpl?: typeof fetch;
   /** Injectable for tests; defaults to `aws configure export-credentials`. */
   cliCredentials?: () => BedrockCredentials;
@@ -102,15 +104,19 @@ function credsFromCli(): BedrockCredentials {
 
 /**
  * AWS Bedrock Converse adapter. Credential resolution order: explicit config ->
- * standard AWS env vars -> `aws configure export-credentials` (SSO dev login).
+ * standard AWS env vars (SigV4) -> BEDROCK_API_KEY (bearer) ->
+ * `aws configure export-credentials` (SSO dev login).
  * CLI credentials are cached until 60s before expiry and refreshed on demand.
  */
 export function createBedrockProvider(config: BedrockConfig): LlmProvider {
   const region = config.region ?? process.env.BEDROCK_REGION ?? "ap-south-1";
   const doFetch = config.fetchImpl ?? fetch;
   const getCli = config.cliCredentials ?? credsFromCli;
+  const bearerKey = config.apiKey ?? process.env.BEDROCK_API_KEY?.trim() ?? "";
   let cached: BedrockCredentials | null = config.credentials ?? credsFromEnv(process.env) ?? null;
-  const cliMode = !cached;
+  // Bearer mode only when no SigV4 material is available at all.
+  const bearerMode = !cached && bearerKey.length > 0;
+  const cliMode = !cached && !bearerMode;
 
   async function resolveCredentials(): Promise<BedrockCredentials> {
     if (!cliMode && cached) return cached;
@@ -134,13 +140,23 @@ export function createBedrockProvider(config: BedrockConfig): LlmProvider {
         },
       });
       let creds: BedrockCredentials;
-      try {
-        creds = await resolveCredentials();
-      } catch (err) {
-        throw new ProviderError(`bedrock credentials unavailable: ${(err as Error).message}`, 0, true);
+      let headers: Record<string, string>;
+      if (bearerMode) {
+        // Long-term Bedrock API keys authenticate as a bearer token on the
+        // same Converse endpoint — no SigV4 signing involved.
+        headers = {
+          "content-type": "application/json",
+          authorization: `Bearer ${bearerKey}`,
+        };
+      } else {
+        try {
+          creds = await resolveCredentials();
+        } catch (err) {
+          throw new ProviderError(`bedrock credentials unavailable: ${(err as Error).message}`, 0, true);
+        }
+        const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
+        headers = signBedrockRequest(creds!, region, path, body, amzDate);
       }
-      const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
-      const headers = signBedrockRequest(creds, region, path, body, amzDate);
 
       let res: Response;
       try {
@@ -156,8 +172,10 @@ export function createBedrockProvider(config: BedrockConfig): LlmProvider {
       if (!res.ok) {
         const text = await res.text().catch(() => "");
         // A stale CLI session -> refresh once and flag retryable so withRetry re-runs.
+        // Bearer keys have nothing to refresh: a 403 means the key is wrong, not retryable.
         if (res.status === 403 && cliMode) cached = null;
-        throw new ProviderError(`bedrock http ${res.status}: ${text.slice(0, 200)}`, res.status, res.status === 429 || res.status >= 500 || res.status === 403);
+        const retryable = res.status === 429 || res.status >= 500 || (res.status === 403 && cliMode);
+        throw new ProviderError(`bedrock http ${res.status}: ${text.slice(0, 200)}`, res.status, retryable);
       }
       let payload: {
         output?: { message?: { content?: { text?: string }[] } };

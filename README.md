@@ -36,8 +36,9 @@ docs/          design spec + implementation plan (superpowers process docs)
   - **`gemini`** (repo default, free tier): `GEMINI_API_KEY` + `GEMINI_MODEL` (default
     `gemini-2.5-flash`). No SDK — a fetch-based adapter against the REST API.
   - **`bedrock`** (used for my verified runs): `BEDROCK_MODEL` (default `zai.glm-5`,
-    `ap-south-1`); credentials from AWS env vars on deploy, or the configured AWS CLI/SSO
-    session locally (`aws configure export-credentials`, auto-refreshed). Pay-per-token, no free
+    `ap-south-1`); credentials from AWS env vars (SigV4) on deploy, else `BEDROCK_API_KEY`
+    (long-term bearer key), else the configured AWS CLI/SSO session locally
+    (`aws configure export-credentials`, auto-refreshed). Pay-per-token, no free
     tier.
   - **`openai-compatible`**: `createOpenAICompatibleProvider` for OpenRouter/Groq/APInex-style
     gateways — `OPENAI_COMPATIBLE_BASE_URL`/`OPENAI_COMPATIBLE_API_KEY`/`LLM_MODEL`.
