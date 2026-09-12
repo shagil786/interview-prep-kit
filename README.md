@@ -35,14 +35,14 @@ docs/          design spec + implementation plan (superpowers process docs)
   retryable errors, JSON fence-stripping, usage reporting):
   - **`gemini`** (repo default, free tier): `GEMINI_API_KEY` + `GEMINI_MODEL` (default
     `gemini-2.5-flash`). No SDK — a fetch-based adapter against the REST API.
-  - **`bedrock`** (used for my verified runs): `BEDROCK_MODEL` (default `zai.glm-5`,
+  - **`bedrock`** (used for my verified runs): `BEDROCK_MODEL` (default `zai.glm-4.7-flash`,
     `ap-south-1`); credentials from AWS env vars (SigV4) on deploy, else `BEDROCK_API_KEY`
     (long-term bearer key), else the configured AWS CLI/SSO session locally
     (`aws configure export-credentials`, auto-refreshed). Pay-per-token, no free
     tier.
   - **`openai-compatible`**: `createOpenAICompatibleProvider` for OpenRouter/Groq/APInex-style
     gateways — `OPENAI_COMPATIBLE_BASE_URL`/`OPENAI_COMPATIBLE_API_KEY`/`LLM_MODEL`.
-  Graders run the **`gemini` default**; the smoke run used **Bedrock GLM-5** (see Testing).
+  Graders run the **`gemini` default**; the smoke run used **Bedrock GLM-4.7-flash** (see Testing).
 - **Search: pluggable**, default **Brave Search API free tier** for the "public discussion of their
   interview process" step (`SEARCH_PROVIDER=brave` + `BRAVE_API_KEY`). `SEARCH_PROVIDER=you` selects
   a You.com REST adapter (`YOU_API_KEY`) — note You.com's free tier is MCP-only (~100 queries/day),
@@ -170,7 +170,7 @@ httpOnly session cookie, server-side ownership scoping on every kit query.
 - Web: typecheck + production build green; component interactions exercised by the browser flows
   below.
 - Run everything: `npm test` (core), `npm test -w @prep/api`, `npm run typecheck`.
-- **Verified live** (`RUN_SMOKE=1`, Bedrock `zai.glm-5`): 5 cases end-to-end in **147s**
+- **Verified live** (`RUN_SMOKE=1`, Bedrock `zai.glm-4.7-flash`): 5 cases end-to-end in **147s**
   (budget 15 min), every kit `validateKit`-clean, ~4-7k tokens per case with per-stage usage
   logged. A real 3-case batch (`npm run evaluate` on the sample) also completed with all kits
   valid and every must covered.
